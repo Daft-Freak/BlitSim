@@ -1322,136 +1322,144 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
     loReg(Reg::PC) = pc;
 
     // decode
-    assert((opcode32 & 0x18008000) == 0x10008000);
+    auto op1 = (opcode32 >> 27) & 3;
+    auto op2 = (opcode32 >> 20) & 0x7F;
 
-    auto op1 = (opcode32 >> 20) & 0x7F;
-    auto op2 = (opcode32 >> 12) & 0x7;
+    assert(op1); // 0 should be a 16-bit instruction
 
-    if((op2 & 0b101) == 0b101) // BL
+    if(op1 == 2) // branch and misc control
     {
-        auto imm11 = opcode32 & 0x7FF;
-        auto imm10 = (opcode32 >> 16) & 0x3FF;
+        assert(opcode32 & 0x8000);
 
-        auto s = opcode32 & (1 << 26);
-        auto i1 = (opcode32 >> 13) & 1;
-        auto i2 = (opcode32 >> 11) & 1;
+        auto bop1 = op2;
+        auto bop2 = (opcode32 >> 12) & 0x7;
 
-        if(!s)
+        if((bop2 & 0b101) == 0b101) // BL
         {
-            i1 ^= 1;
-            i2 ^= 1;
+            auto imm11 = opcode32 & 0x7FF;
+            auto imm10 = (opcode32 >> 16) & 0x3FF;
+
+            auto s = opcode32 & (1 << 26);
+            auto i1 = (opcode32 >> 13) & 1;
+            auto i2 = (opcode32 >> 11) & 1;
+
+            if(!s)
+            {
+                i1 ^= 1;
+                i2 ^= 1;
+            }
+
+            uint32_t offset = imm11 << 1 | imm10 << 12 | i2 << 22 | i1 << 23;
+
+            if(s)
+                offset |= 0xFF000000; // sign extend
+
+            loReg(Reg::LR) = (pc - 2) | 1; // magic switch to thumb bit...
+            updateTHUMBPC((pc - 2) + offset);
+
+            return pcNCycles + pcSCycles * 3;
         }
 
-        uint32_t offset = imm11 << 1 | imm10 << 12 | i2 << 22 | i1 << 23;
+        assert((bop2 & 0b101) == 0);
 
-        if(s)
-            offset |= 0xFF000000; // sign extend
-
-        loReg(Reg::LR) = (pc - 2) | 1; // magic switch to thumb bit...
-        updateTHUMBPC((pc - 2) + offset);
-
-        return pcNCycles + pcSCycles * 3;
-    }
-
-    assert((op2 & 0b101) == 0);
-
-    switch(op1)
-    {
-        case 0x38: // MSR
-        case 0x39:
+        switch(bop1)
         {
-            auto srcReg = static_cast<Reg>((opcode32 >> 16) & 0xF);
-            auto sysm = opcode32 & 0xFF;
-            bool isPrivileged = (cpsr & 0x3F) != 0 || !(control & (1 << 0));
+            case 0x38: // MSR
+            case 0x39:
+            {
+                auto srcReg = static_cast<Reg>((opcode32 >> 16) & 0xF);
+                auto sysm = opcode32 & 0xFF;
+                bool isPrivileged = (cpsr & 0x3F) != 0 || !(control & (1 << 0));
 
-            if((sysm >> 3) == 0)
-            {
-                // APSR
-            }
-            else if((sysm >> 3) == 1)
-            {
-                // write MSP/PSP
-                if(isPrivileged)
+                if((sysm >> 3) == 0)
                 {
+                    // APSR
+                }
+                else if((sysm >> 3) == 1)
+                {
+                    // write MSP/PSP
+                    if(isPrivileged)
+                    {
+                        if(sysm == 8)
+                            loReg(Reg::MSP) = reg(srcReg) & ~3;
+                        else if(sysm == 9)
+                            loReg(Reg::PSP) = reg(srcReg) & ~3;
+                    }
+                    return pcSCycles * 2 + 1;
+                }
+                else if((sysm >> 3) == 2)
+                {
+                    // PRIMASK/CONTROL
+                    if(isPrivileged)
+                    {
+                        if(sysm == 0x10)
+                            primask = reg(srcReg) & 1;
+                        else if(sysm == 0x14 && (cpsr & 0x3F) == 0)
+                            control = reg(srcReg) & 3;
+                    }
+                    return pcSCycles * 2 + 1;
+                }
+
+                break;
+            }
+
+            case 0x3B: // misc
+            {
+                auto op = (opcode32 >> 4) & 0xF;
+
+                if(op == 0x4 || op == 0x5) // DSB/DMB
+                {
+                    //do something?
+                    return pcSCycles * 2 + 1;
+                }
+
+                break;
+            }
+
+            case 0x3E: // MRS
+            case 0x3F:
+            {
+                auto dstReg = static_cast<Reg>((opcode32 >> 8) & 0xF);
+                auto sysm = opcode32 & 0xFF;
+
+                if((sysm >> 3) == 0)
+                {
+                    // xPSR
+                    uint32_t mask = 0;
+                    if(sysm & 1) // IPSR
+                        mask |= 0x1FF;
+
+                    // if(sysm & 2) // T bit reads as 0 so do nothing
+
+                    if(sysm & 4) // APSR
+                        mask |= 0xF8000000;
+
+                    reg(dstReg) = cpsr & mask;
+
+                    return pcSCycles * 2 + 1;
+                }
+                else if((sysm >> 3) == 1)
+                {
+                    // MSP/PSP
                     if(sysm == 8)
-                        loReg(Reg::MSP) = reg(srcReg) & ~3;
+                        reg(dstReg) = loReg(Reg::MSP);
                     else if(sysm == 9)
-                        loReg(Reg::PSP) = reg(srcReg) & ~3;
+                        reg(dstReg) = loReg(Reg::PSP);
+
+                    return pcSCycles * 2 + 1;
                 }
-                return pcSCycles * 2 + 1;
-            }
-            else if((sysm >> 3) == 2)
-            {
-                // PRIMASK/CONTROL
-                if(isPrivileged)
+                else if((sysm >> 3) == 2)
                 {
+                    // PRIMASK/CONTROL
                     if(sysm == 0x10)
-                        primask = reg(srcReg) & 1;
-                    else if(sysm == 0x14 && (cpsr & 0x3F) == 0)
-                        control = reg(srcReg) & 3;
+                        reg(dstReg) = primask & 1;
+                    else if(sysm == 0x14)
+                        reg(dstReg) = control & 3;
+
+                    return pcSCycles * 2 + 1;
                 }
-                return pcSCycles * 2 + 1;
+                break;
             }
-
-            break;
-        }
-
-        case 0x3B: // misc
-        {
-            auto op = (opcode32 >> 4) & 0xF;
-
-            if(op == 0x4 || op == 0x5) // DSB/DMB
-            {
-                //do something?
-                return pcSCycles * 2 + 1;
-            }
-
-            break;
-        }
-
-        case 0x3E: // MRS
-        case 0x3F:
-        {
-            auto dstReg = static_cast<Reg>((opcode32 >> 8) & 0xF);
-            auto sysm = opcode32 & 0xFF;
-
-            if((sysm >> 3) == 0)
-            {
-                // xPSR
-                uint32_t mask = 0;
-                if(sysm & 1) // IPSR
-                    mask |= 0x1FF;
-
-                // if(sysm & 2) // T bit reads as 0 so do nothing
-
-                if(sysm & 4) // APSR
-                    mask |= 0xF8000000;
-
-                reg(dstReg) = cpsr & mask;
-
-                return pcSCycles * 2 + 1;
-            }
-            else if((sysm >> 3) == 1)
-            {
-                // MSP/PSP
-                if(sysm == 8)
-                    reg(dstReg) = loReg(Reg::MSP);
-                else if(sysm == 9)
-                    reg(dstReg) = loReg(Reg::PSP);
-
-                return pcSCycles * 2 + 1;
-            }
-            else if((sysm >> 3) == 2)
-            {
-                // PRIMASK/CONTROL
-                if(sysm == 0x10)
-                    reg(dstReg) = primask & 1;
-                else if(sysm == 0x14)
-                    reg(dstReg) = control & 3;
-
-                return pcSCycles * 2 + 1;
-            }
-            break;
         }
     }
 
