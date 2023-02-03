@@ -7,12 +7,37 @@
 
 #include "ARMv6MCore.h"
 
+constexpr uint32_t blit_game_magic = 0x54494C42; // "BLIT"
+
+struct BlitGameHeader {
+  uint32_t magic;
+
+  uint32_t render;
+  uint32_t tick;
+  uint32_t init;
+
+  uint32_t end;
+  uint32_t start;
+};
+
+// missing the "BLITMETA" header and size
+struct RawMetadata {
+  uint32_t crc32;
+  char datetime[16];
+  char title[25];
+  char description[129];
+  char version[17];
+  char author[17];
+};
+
 static bool quit = false;
 
 static MemoryBus mem;
 static ARMv6MCore cpuCore(mem);
 
 static std::ifstream blitFile;
+
+static BlitGameHeader blitHeader;
 
 static void pollEvents()
 {
@@ -44,6 +69,63 @@ static void pollEvents()
 
 static bool parseBlit(std::ifstream &file)
 {
+    uint8_t buf[10];
+
+    file.read(reinterpret_cast<char *>(buf), 8);
+
+    if(memcmp(buf, "RELO", 4) != 0)
+    {
+        std::cerr << "Missing RELO header!\n";
+        return false;
+    }
+
+    uint32_t numRelocs = buf[4] | buf[5] << 8 | buf[6] << 16 | buf[7] << 24;
+
+    uint32_t relocsEnd = numRelocs * 4 + 8;
+
+    file.seekg(relocsEnd);
+
+    // read header
+    file.read(reinterpret_cast<char *>(&blitHeader), sizeof(blitHeader));
+
+    if(blitHeader.magic != blit_game_magic)
+    {
+        std::cerr << "Incorrect blit header magic!\n";
+        return false;
+    }
+
+    uint32_t length = blitHeader.end - 0x90000000;
+
+    printf("%i %i\n", relocsEnd, length);
+
+    // read metadata
+    RawMetadata meta;
+
+    file.seekg(relocsEnd + length);
+
+    file.read(reinterpret_cast<char *>(buf), 10);
+
+    if(memcmp(buf, "BLITMETA", 4) != 0)
+    {
+        std::cerr << "Incorrect metadata header!\n";
+        return false;
+    }
+
+    uint16_t metadataLen = buf[8] | buf[9] << 8;
+
+    length += metadataLen + 10;
+
+    file.read(reinterpret_cast<char *>(&meta), sizeof(meta));
+
+    std::cout << "Loading \"" << meta.title << "\" " << meta.version << " by " << meta.author << "\n";
+
+    // write directly to start of qspi flash
+    // (so we don't have to apply relocs)
+    auto flashPtr = mem.mapAddress(0x90000000);
+
+    file.seekg(relocsEnd);
+    file.read(reinterpret_cast<char *>(flashPtr), length);
+
     return true;
 }
 
