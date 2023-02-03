@@ -1305,7 +1305,8 @@ int ARMv6MCore::doTHUMB1617(uint16_t opcode, uint32_t pc)
 
 int ARMv6MCore::doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc)
 {
-    assert(!(opcode & (1 << 11))); // 32 bit op
+    if(opcode & (1 << 11))
+        return doTHUMB32BitInstruction(opcode, pc);
 
     uint32_t offset = static_cast<int16_t>(opcode << 5) >> 4; // sign extend and * 2
 
