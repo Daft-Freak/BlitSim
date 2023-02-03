@@ -110,6 +110,9 @@ private:
     int doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc);
     int doTHUMB1617(uint16_t opcode, uint32_t pc);
     int doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc);
+
+    uint32_t getShiftedReg(uint32_t opcode, bool &carry);
+
     int doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc);
 
     void updateTHUMBPC(uint32_t pc);

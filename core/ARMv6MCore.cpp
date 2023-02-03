@@ -1314,6 +1314,78 @@ int ARMv6MCore::doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc)
     return pcSCycles * 2 + pcNCycles; // 2S + 1N
 }
 
+uint32_t ARMv6MCore::getShiftedReg(uint32_t opcode, bool &carry)
+{
+    auto imm = ((opcode >> 10) & 0x1C) | ((opcode >> 6) & 0x3);
+    auto type = (opcode >> 4) & 3;
+
+    auto r = static_cast<Reg>(opcode & 0xF);
+    auto ret = loReg(r);
+
+    // left shift by immediate 0, do nothing and preserve carry
+    if(imm == 0 && type)
+    {
+        carry = cpsr & Flag_C;
+        return ret;
+    }
+
+    switch(type)
+    {
+        case 0: // LSL
+            carry = ret & (1 << (32 - imm));
+            ret <<= imm;
+            break;
+        case 1: // LSR
+            if(!imm) // shift by 32
+            {
+                carry = ret & (1 << 31);
+                ret = 0;
+            }
+            else
+            {
+                carry = ret & (1 << (imm - 1));
+                ret >>= imm;
+            }
+            break;
+        case 2: // ASR
+        {
+            if(!imm) // shift by 32
+            {
+                auto sign = ret & signBit;
+                ret = sign ? 0xFFFFFFFF : 0;
+                carry = sign;
+            }
+            else
+            {
+                carry = ret & (1 << (imm - 1));
+                ret = static_cast<int32_t>(ret) >> imm;
+            }
+            break;
+        }
+        case 3:
+            if(!imm) // RRX (immediate 0)
+            {
+                carry = ret & 1; // carry out
+
+                ret >>= 1;
+
+                if(cpsr & Flag_C) // carry in
+                    ret |= 0x80000000;
+            }
+            else // ROR
+            {
+                ret = (ret >> imm) | (ret << (32 - imm));
+                carry = ret & (1 << 31);
+            }
+            break;
+
+        default:
+            assert(!"Invalid shift type!");
+    }
+    
+    return ret;
+}
+
 int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
 {
     // fetch second half
