@@ -1045,7 +1045,10 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
         case 0x0: // add/sub imm to SP
             return doTHUMB13SPOffset(opcode, pc);
 
-        case 0x1: // CBZ/CBNZ
+        case 0x1: // CBZ
+        case 0x3:
+        case 0x9: // CBNZ
+        case 0xB:
         {
             bool nz = opcode & (1 << 11);
             int offset = (opcode & 0xF8) >> 2 | (opcode & (1 << 9)) >> 3;
