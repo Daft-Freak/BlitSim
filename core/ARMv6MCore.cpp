@@ -1874,8 +1874,79 @@ int ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
     auto op1 = (opcode >> 23) & 3;
     auto op2 = (opcode >> 6) & 0x3F;
 
-    printf("Unhandled load word opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
-    exit(1);
+    auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
+    auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
+
+    assert(dstReg != Reg::PC); // TODO
+
+    assert(!(op1 & 2));
+
+    int cycles = pcSCycles * 2;
+    uint32_t data;
+
+    if(baseReg == Reg::PC) // LDR (literal)
+    {
+        bool add = opcode & (1 << 23);
+
+        auto offset = (opcode & 0xFFF);
+
+        uint32_t addr = pc;
+        if(addr & 2)
+            addr += 2; // align
+        
+        if(add)
+            addr += offset;
+        else
+            addr -= offset;
+        
+        data = readMem32(addr, cycles);
+    }
+    else if(op1 == 0 && op2 == 0) // LDR (register)
+    {
+        auto mReg = static_cast<Reg>(opcode & 0xF);
+        auto shift = (opcode >> 4) & 3;
+
+        uint32_t addr = loReg(baseReg) + (loReg(mReg) << shift);
+
+        data = readMem32(addr, cycles);
+    }
+    else if(op1 == 0 && (op2 & 0x3C) == 0x38) // LDRT
+    {
+        printf("Unhandled load word opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
+        exit(1);
+    }
+    else // LDR (immediate)
+    {
+        if(op1 == 1) // + 12 bit imm
+        {
+            auto offset = (opcode & 0xFFF);
+
+            uint32_t addr = loReg(baseReg) + offset;
+
+            data = readMem32(addr, cycles);
+        }
+        else // +/- 8 bit imm
+        {
+            auto offset = (opcode & 0xFF);
+
+            bool writeback = opcode & (1 << 8);
+            bool add = opcode & (1 << 9);
+            bool index = opcode & (1 << 10);
+
+            uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
+            uint32_t addr = index ? offsetAddr : loReg(baseReg);
+
+            int cycles = pcSCycles * 2;
+            data = readMem32(addr, cycles);
+
+            if(writeback)
+                loReg(baseReg) = offsetAddr;
+        }
+    }
+
+    loReg(dstReg) = data;
+
+    return cycles;
 }
 
 int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
