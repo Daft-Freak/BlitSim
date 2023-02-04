@@ -119,7 +119,7 @@ namespace blit {
         Vec3 tilt;
         Pen LED;
 
-        /*AudioChannel*/void *channels; // TODO
+        /*AudioChannel*/uint32_t channels; // TODO
 
         uint32_t set_screen_mode;
         uint32_t set_screen_palette;
