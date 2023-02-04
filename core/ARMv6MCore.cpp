@@ -1777,10 +1777,79 @@ int ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
     auto op1 = (opcode >> 21) & 7;
     auto op2 = (opcode >> 6) & 0x3F;
 
-    printf("Unhandled store opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
-    exit(1);
-}
+    auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
+    auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
 
+    if(op1 & 4) // 12 bit immediate
+    {
+        auto offset = (opcode & 0xFFF);
+
+        uint32_t addr = loReg(baseReg) + offset;
+
+        int cycles = pcSCycles * 2;
+
+        switch(op1 & 3)
+        {
+            case 0:
+                writeMem8(addr, loReg(dstReg), cycles); break; // STRB
+            case 1:
+                writeMem16(addr, loReg(dstReg), cycles); break; // STRH
+            case 2:
+                writeMem32(addr, loReg(dstReg), cycles); break; // STR
+        }
+
+        return cycles;
+    }
+    else if(op2 & 0x20) // 8 bit immediate
+    {
+        auto offset = (opcode & 0xFF);
+
+        bool writeback = opcode & (1 << 8);
+        bool add = opcode & (1 << 9);
+        bool index = opcode & (1 << 10);
+
+        uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
+        uint32_t addr = index ? offsetAddr : loReg(baseReg);
+
+        int cycles = pcSCycles * 2;
+
+        switch(op1 & 3)
+        {
+            case 0:
+                writeMem8(addr, loReg(dstReg), cycles); break; // STRB
+            case 1:
+                writeMem16(addr, loReg(dstReg), cycles); break; // STRH
+            case 2:
+                writeMem32(addr, loReg(dstReg), cycles); break; // STR
+        }
+
+        if(writeback)
+            loReg(baseReg) = offsetAddr;
+
+        return cycles;
+    }
+    else // register
+    {
+        auto mReg = static_cast<Reg>(opcode & 0xF);
+        auto shift = (opcode >> 4) & 3;
+
+        uint32_t addr = loReg(baseReg) + (loReg(mReg) << shift);
+
+        int cycles = pcSCycles * 2;
+
+        switch(op1 & 3)
+        {
+            case 0:
+                writeMem8(addr, loReg(dstReg), cycles); break; // STRB
+            case 1:
+                writeMem16(addr, loReg(dstReg), cycles); break; // STRH
+            case 2:
+                writeMem32(addr, loReg(dstReg), cycles); break; // STR
+        }
+
+        return cycles;
+    }
+}
 
 int ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
 {
