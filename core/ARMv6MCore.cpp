@@ -1620,8 +1620,95 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
 int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
 {
     auto op = (opcode >> 23) & 3;
-
+    bool writeback = opcode & (1 << 21);   
     bool isLoad = opcode & (1 << 20);
+    auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
+    uint16_t regList = opcode & 0xFFFF;
+
+    auto addr = loReg(baseReg);
+
+    bool seq = true;
+    int cycles = pcSCycles * 2;
+
+    bool baseInList = regList & (1 << static_cast<int>(baseReg));
+
+    if(isLoad) // LDM
+    {
+        assert(!(regList & (1 << 13)));
+
+        if(op == 1) // IA
+        {
+            int i = 0;
+            for(; regList; regList >>= 1, i++)
+            {
+                if(!(regList & 1))
+                    continue;
+
+                if(i == 15)
+                    updateTHUMBPC(readMem32(addr, cycles, seq) & ~1);
+                else
+                    regs[i] = readMem32(addr, cycles, seq);
+
+                seq = false;
+                addr += 4;
+            }
+
+            if(writeback && !baseInList)
+                loReg(baseReg) = addr;
+
+            return cycles;
+        }
+    }
+    else // STM
+    {
+        assert(!(regList & (1 << 13)));
+        assert(!(regList & (1 << 15)));
+
+        if(op == 1) // IA
+        {
+            int i = 0;
+            for(; regList; regList >>= 1, i++)
+            {
+                if(!(regList & 1))
+                    continue;
+
+                writeMem32(addr, regs[i], cycles, seq);
+                seq = false;
+                addr += 4;
+            }
+
+            if(writeback)
+                loReg(baseReg) = addr;
+
+            return cycles;
+        }
+        else if(op == 2) // DB
+        {
+            for(uint16_t t = regList; t; t >>= 1)
+            {
+                if(t & 1)
+                    addr -= 4;
+            }
+
+            auto endAddr = addr;
+
+            int i = 0;
+            for(; regList; regList >>= 1, i++)
+            {
+                if(!(regList & 1))
+                    continue;
+
+                writeMem32(addr, regs[i], cycles, seq);
+                seq = false;
+                addr += 4;
+            }
+
+            if(writeback)
+                loReg(baseReg) = endAddr;
+
+            return cycles;
+        }
+    }
 
     printf("Unhandled %s multiple opcode %08X (%X) @%08X\n", isLoad ? "load" : "store", opcode, op, pc - 6);
     exit(1);
@@ -1632,6 +1719,74 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
     auto op1 = (opcode >> 23) & 3;
     auto op2 = (opcode >> 20) & 3;
     auto op3 = (opcode >> 4) & 0xF;
+
+    auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
+
+
+    if(op1 == 1 && op2 == 1)
+    {
+        if(op3 == 0) // TBB
+        {
+            assert((opcode & 0xFF00) == 0xF000);
+
+            auto indexReg = static_cast<Reg>(opcode & 0xF);
+
+            auto addr = loReg(baseReg) + loReg(indexReg);
+
+            int cycles = pcSCycles * 3 + pcNCycles;
+            auto offset = readMem8(addr, cycles);
+
+            updateTHUMBPC(pc + offset * 2);
+
+            return cycles;
+        }
+    }
+    else if((op1 & 2) == 2 && (op2 & 1) == 0) // STRD (immediate)
+    {
+        auto offset = (opcode & 0xFF) << 2;
+        auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
+        auto dstReg2 = static_cast<Reg>((opcode >> 8) & 0xF);
+
+        bool writeback = opcode & (1 << 21);
+        bool add = opcode & (1 << 23);
+        bool index = opcode & (1 << 24);
+
+        uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
+        uint32_t addr = index ? offsetAddr : loReg(baseReg);
+
+        int cycles = pcSCycles * 2;
+
+        writeMem32(addr, loReg(dstReg), cycles);
+        writeMem32(addr + 4, loReg(dstReg2), cycles);
+
+        if(writeback)
+            loReg(baseReg) = offsetAddr;
+
+        return cycles;
+    }
+    else if((op1 & 2) == 2 && (op2 & 1)) // LDRD (immediate)
+    {
+        auto offset = (opcode & 0xFF) << 2;
+        auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
+        auto dstReg2 = static_cast<Reg>((opcode >> 8) & 0xF);
+
+        bool writeback = opcode & (1 << 21);
+        bool add = opcode & (1 << 23);
+        bool index = opcode & (1 << 24);
+
+        uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
+        uint32_t addr = index ? offsetAddr : loReg(baseReg);
+
+        int cycles = pcSCycles * 2;
+
+        loReg(dstReg) = readMem32(addr, cycles);
+        loReg(dstReg2) = readMem32(addr + 4, cycles);
+
+        if(writeback)
+            loReg(baseReg) = offsetAddr;
+
+        return cycles;
+    }
 
     printf("Unhandled load/store dual/exclusive opcode %08X (%X %X %X) @%08X\n", opcode, op1, op2, op3, pc - 6);
     exit(1);
@@ -1897,14 +2052,161 @@ int ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
     auto op1 = (opcode >> 23) & 3;
     auto op2 = (opcode >> 6) & 0x3F;
 
-    printf("Unhandled load byte/hint opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
-    exit(1);
+    auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
+    auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
+
+    int cycles = pcSCycles * 2;
+
+    if(dstReg == Reg::PC) // preload
+    {
+
+    }
+    else if(baseReg == Reg::PC) // LDR(S)B (literal)
+    {}
+    else if(!(op1 & 1) && op2 == 0) // LDR(S)B (register)
+    {
+        bool isSigned = op1 & 2;
+
+        auto mReg = static_cast<Reg>(opcode & 0xF);
+        auto shift = (opcode >> 4) & 3;
+
+        uint32_t addr = loReg(baseReg) + (loReg(mReg) << shift);
+
+        uint32_t data = readMem8(addr, cycles);
+
+        if(isSigned && (data & 0x80))
+            data |= 0xFFFFFF00;
+
+        loReg(dstReg) = data;
+
+        return cycles;
+    }
+    else if(!(op1 & 1) && (op2 & 0x3C) == 0x38) // LDR(S)BT
+    {}
+    else // LDR(S)B (immediate)
+    {
+        bool isSigned = op1 & 2;
+
+        if(op1 & 1) // + 12 bit imm
+        {
+            auto offset = (opcode & 0xFFF);
+
+            uint32_t addr = loReg(baseReg) + offset;
+
+            uint32_t data = readMem8(addr, cycles);
+
+            if(isSigned && (data & 0x80))
+                data |= 0xFFFFFF00;
+
+            loReg(dstReg) = data;
+
+            return cycles;
+        }
+        else // +/- 8 bit imm
+        {
+            auto offset = (opcode & 0xFF);
+
+            bool writeback = opcode & (1 << 8);
+            bool add = opcode & (1 << 9);
+            bool index = opcode & (1 << 10);
+
+            uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
+            uint32_t addr = index ? offsetAddr : loReg(baseReg);
+
+            uint32_t data = readMem8(addr, cycles);
+
+            if(isSigned && (data & 0x80))
+                data |= 0xFFFFFF00;
+
+            if(writeback)
+                loReg(baseReg) = offsetAddr;
+
+            loReg(dstReg) = data;
+
+            return cycles;
+        }
+    }
 }
 
 int ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 23) & 3;
     auto op2 = (opcode >> 6) & 0x3F;
+
+    auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
+    auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
+
+    int cycles = pcSCycles * 2;
+
+    if(dstReg == Reg::PC) // unallocated hints
+    {
+
+    }
+    else if(baseReg == Reg::PC) // LDR(S)H (literal)
+    {}
+    else if(!(op1 & 1) && op2 == 0) // LDR(S)H (register)
+    {
+        bool isSigned = op1 & 2;
+
+        auto mReg = static_cast<Reg>(opcode & 0xF);
+        auto shift = (opcode >> 4) & 3;
+
+        uint32_t addr = loReg(baseReg) + (loReg(mReg) << shift);
+
+        uint32_t data = readMem16(addr, cycles);
+
+        if(isSigned && (data & 0x8000))
+            data |= 0xFFFF0000;
+
+        loReg(dstReg) = data;
+
+        return cycles;
+    }
+    else if(!(op1 & 1) && (op2 & 0x3C) == 0x38) // LDR(S)HT
+    {}
+    else // LDR(S)H (immediate)
+    {
+        bool isSigned = op1 & 2;
+
+        if(op1 & 1) // + 12 bit imm
+        {
+            auto offset = (opcode & 0xFFF);
+
+            uint32_t addr = loReg(baseReg) + offset;
+
+            uint32_t data = readMem16(addr, cycles);
+
+            if(isSigned && (data & 0x8000))
+                data |= 0xFFFF0000;
+
+            loReg(dstReg) = data;
+
+            return cycles;
+        }
+        else // +/- 8 bit imm
+        {
+            auto offset = (opcode & 0xFF);
+
+            bool writeback = opcode & (1 << 8);
+            bool add = opcode & (1 << 9);
+            bool index = opcode & (1 << 10);
+
+            uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
+            uint32_t addr = index ? offsetAddr : loReg(baseReg);
+
+            uint32_t data = readMem16(addr, cycles);
+
+            if(isSigned && (data & 0x8000))
+                data |= 0xFFFF0000;
+
+            if(writeback)
+                loReg(baseReg) = offsetAddr;
+
+            loReg(dstReg) = data;
+
+            return cycles;
+        }
+    }
 
     printf("Unhandled load half/hint opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
     exit(1);
