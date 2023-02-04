@@ -117,6 +117,20 @@ private:
     uint32_t getShiftedReg(uint32_t opcode, bool &carry);
 
     int doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc);
+    int doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitDataProcessingModifiedImm(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc);
+    int doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc);
 
     void updateTHUMBPC(uint32_t pc);
 

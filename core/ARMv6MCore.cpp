@@ -1530,143 +1530,303 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
 
     assert(op1); // 0 should be a 16-bit instruction
 
-    if(op1 == 2) // branch and misc control
+    if(op1 == 1)
     {
-        assert(opcode32 & 0x8000);
+        if(op2 & 0x40) // coprocessor
+            return doTHUMB32BitCoprocessor(opcode32, pc);
+        else if(op2 & 0x20) // data processing (shifted register)
+            return doTHUMB32BitDataProcessingShiftedReg(opcode32, pc);
+        else if(op2 & 4) // load/store dual or exclusive
+            return doTHUMB32BitLoadStoreDualEx(opcode32, pc);
+        else // load/store multiple
+            return doTHUMB32BitLoadStoreMultiple(opcode32, pc);
+    }
+    else if(op1 == 2)
+    {
+        if(opcode32 & 0x8000)
+            return doTHUMB32BitBranchMisc(opcode32, pc);
+        else if(op2 & 0x20) // data processing (plain binary immediate)
+            return doTHUMB32BitDataProcessingPlainImm(opcode32, pc);
+        else // data processing (modified immediate)
+            return doTHUMB32BitDataProcessingModifiedImm(opcode32, pc);
+    }
+    else if(op1 == 3)
+    {
+        if(op2 & 0x40) // coprocessor
+            return doTHUMB32BitCoprocessor(opcode32, pc);
+        else if((op2 & 0x78) == 0x38) // long multiply (accumulate), divide
+            return doTHUMB32BitLongMultiplyDiv(opcode32, pc);
+        else if((op2 & 0x78) == 0x30) // multiply (accumulate), diff
+            return doTHUMB32BitMultiplyDiff(opcode32, pc);
+        else if(op2 & 0x20) // data processing (register)
+            return doTHUMB32BitDataProcessingReg(opcode32, pc);
+        else if((op2 & 7) == 5) // load word
+            return doTHUMB32BitLoadWord(opcode32, pc);
+        else if((op2 & 7) == 3) // load halfword, memory hints
+            return doTHUMB32BitLoadHalfHint(opcode32, pc);
+        else if((op2 & 7) == 1) // load byte, memory hints
+            return doTHUMB32BitLoadByteHint(opcode32, pc);
+        else // store single data item
+            return doTHUMB32BitStoreSingle(opcode32, pc);
+    }
 
-        auto bop1 = op2;
-        auto bop2 = (opcode32 >> 12) & 0x7;
+    __builtin_unreachable();
+}
 
-        if((bop2 & 0b101) == 0b101) // BL
+int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
+{
+    auto op = (opcode >> 23) & 3;
+
+    bool isLoad = opcode & (1 << 20);
+
+    printf("Unhandled %s multiple opcode %08X (%X) @%08X\n", isLoad ? "load" : "store", opcode, op, pc - 6);
+    exit(1);
+}
+
+int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
+{
+    auto op1 = (opcode >> 23) & 3;
+    auto op2 = (opcode >> 20) & 3;
+    auto op3 = (opcode >> 4) & 0xF;
+
+    printf("Unhandled load/store dual/exclusive opcode %08X (%X %X %X) @%08X\n", opcode, op1, op2, op3, pc - 6);
+    exit(1);
+}
+
+int ARMv6MCore::doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t pc)
+{
+    auto op = (opcode >> 21) & 0xF;
+
+    printf("Unhandled dp shift reg opcode %08X (%X) @%08X\n", opcode, op, pc - 6);
+    exit(1);
+}
+
+int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
+{
+    auto op = opcode & (1 << 4);
+    auto coproc = (opcode >> 8) & 0xF;
+    auto op1 = (opcode >> 20) & 0x3F;
+
+    printf("Unhandled coprocessor opcode %08X (%X %X %X) @%08X\n", opcode, op, coproc, op1, pc - 6);
+    exit(1);
+}
+
+int ARMv6MCore::doTHUMB32BitDataProcessingModifiedImm(uint32_t opcode, uint32_t pc)
+{
+    auto op = (opcode >> 21) & 0xF;
+
+    printf("Unhandled dp mod imm opcode %08X (%X) @%08X\n", opcode, op, pc - 6);
+    exit(1);
+}
+
+int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
+{
+    auto op = (opcode >> 21) & 0xF;
+
+    printf("Unhandled dp plain imm opcode %08X (%X) @%08X\n", opcode, op, pc - 6);
+    exit(1);
+}
+
+int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
+{
+    // branch and misc control
+
+    auto op1 = (opcode >> 20) & 0x7F;
+    auto op2 = (opcode >> 12) & 0x7;
+
+    if((op2 & 0b101) == 0b101) // BL
+    {
+        auto imm11 = opcode & 0x7FF;
+        auto imm10 = (opcode >> 16) & 0x3FF;
+
+        auto s = opcode & (1 << 26);
+        auto i1 = (opcode >> 13) & 1;
+        auto i2 = (opcode >> 11) & 1;
+
+        if(!s)
         {
-            auto imm11 = opcode32 & 0x7FF;
-            auto imm10 = (opcode32 >> 16) & 0x3FF;
-
-            auto s = opcode32 & (1 << 26);
-            auto i1 = (opcode32 >> 13) & 1;
-            auto i2 = (opcode32 >> 11) & 1;
-
-            if(!s)
-            {
-                i1 ^= 1;
-                i2 ^= 1;
-            }
-
-            uint32_t offset = imm11 << 1 | imm10 << 12 | i2 << 22 | i1 << 23;
-
-            if(s)
-                offset |= 0xFF000000; // sign extend
-
-            loReg(Reg::LR) = (pc - 2) | 1; // magic switch to thumb bit...
-            updateTHUMBPC((pc - 2) + offset);
-
-            return pcNCycles + pcSCycles * 3;
+            i1 ^= 1;
+            i2 ^= 1;
         }
 
-        assert((bop2 & 0b101) == 0);
+        uint32_t offset = imm11 << 1 | imm10 << 12 | i2 << 22 | i1 << 23;
 
-        switch(bop1)
+        if(s)
+            offset |= 0xFF000000; // sign extend
+
+        loReg(Reg::LR) = (pc - 2) | 1; // magic switch to thumb bit...
+        updateTHUMBPC((pc - 2) + offset);
+
+        return pcNCycles + pcSCycles * 3;
+    }
+
+    assert((op2 & 0b101) == 0);
+
+    switch(op1)
+    {
+        case 0x38: // MSR
+        case 0x39:
         {
-            case 0x38: // MSR
-            case 0x39:
+            auto srcReg = static_cast<Reg>((opcode >> 16) & 0xF);
+            auto sysm = opcode & 0xFF;
+            bool isPrivileged = (cpsr & 0x3F) != 0 || !(control & (1 << 0));
+
+            if((sysm >> 3) == 0)
             {
-                auto srcReg = static_cast<Reg>((opcode32 >> 16) & 0xF);
-                auto sysm = opcode32 & 0xFF;
-                bool isPrivileged = (cpsr & 0x3F) != 0 || !(control & (1 << 0));
-
-                if((sysm >> 3) == 0)
-                {
-                    // APSR
-                }
-                else if((sysm >> 3) == 1)
-                {
-                    // write MSP/PSP
-                    if(isPrivileged)
-                    {
-                        if(sysm == 8)
-                            loReg(Reg::MSP) = reg(srcReg) & ~3;
-                        else if(sysm == 9)
-                            loReg(Reg::PSP) = reg(srcReg) & ~3;
-                    }
-                    return pcSCycles * 2 + 1;
-                }
-                else if((sysm >> 3) == 2)
-                {
-                    // PRIMASK/CONTROL
-                    if(isPrivileged)
-                    {
-                        if(sysm == 0x10)
-                            primask = reg(srcReg) & 1;
-                        else if(sysm == 0x14 && (cpsr & 0x3F) == 0)
-                            control = reg(srcReg) & 3;
-                    }
-                    return pcSCycles * 2 + 1;
-                }
-
-                break;
+                // APSR
             }
-
-            case 0x3B: // misc
+            else if((sysm >> 3) == 1)
             {
-                auto op = (opcode32 >> 4) & 0xF;
-
-                if(op == 0x4 || op == 0x5) // DSB/DMB
+                // write MSP/PSP
+                if(isPrivileged)
                 {
-                    //do something?
-                    return pcSCycles * 2 + 1;
-                }
-
-                break;
-            }
-
-            case 0x3E: // MRS
-            case 0x3F:
-            {
-                auto dstReg = static_cast<Reg>((opcode32 >> 8) & 0xF);
-                auto sysm = opcode32 & 0xFF;
-
-                if((sysm >> 3) == 0)
-                {
-                    // xPSR
-                    uint32_t mask = 0;
-                    if(sysm & 1) // IPSR
-                        mask |= 0x1FF;
-
-                    // if(sysm & 2) // T bit reads as 0 so do nothing
-
-                    if(sysm & 4) // APSR
-                        mask |= 0xF8000000;
-
-                    reg(dstReg) = cpsr & mask;
-
-                    return pcSCycles * 2 + 1;
-                }
-                else if((sysm >> 3) == 1)
-                {
-                    // MSP/PSP
                     if(sysm == 8)
-                        reg(dstReg) = loReg(Reg::MSP);
+                        loReg(Reg::MSP) = reg(srcReg) & ~3;
                     else if(sysm == 9)
-                        reg(dstReg) = loReg(Reg::PSP);
-
-                    return pcSCycles * 2 + 1;
+                        loReg(Reg::PSP) = reg(srcReg) & ~3;
                 }
-                else if((sysm >> 3) == 2)
-                {
-                    // PRIMASK/CONTROL
-                    if(sysm == 0x10)
-                        reg(dstReg) = primask & 1;
-                    else if(sysm == 0x14)
-                        reg(dstReg) = control & 3;
-
-                    return pcSCycles * 2 + 1;
-                }
-                break;
+                return pcSCycles * 2 + 1;
             }
+            else if((sysm >> 3) == 2)
+            {
+                // PRIMASK/CONTROL
+                if(isPrivileged)
+                {
+                    if(sysm == 0x10)
+                        primask = reg(srcReg) & 1;
+                    else if(sysm == 0x14 && (cpsr & 0x3F) == 0)
+                        control = reg(srcReg) & 3;
+                }
+                return pcSCycles * 2 + 1;
+            }
+
+            break;
+        }
+
+        case 0x3B: // misc
+        {
+            auto op = (opcode >> 4) & 0xF;
+
+            if(op == 0x4 || op == 0x5) // DSB/DMB
+            {
+                //do something?
+                return pcSCycles * 2 + 1;
+            }
+
+            break;
+        }
+
+        case 0x3E: // MRS
+        case 0x3F:
+        {
+            auto dstReg = static_cast<Reg>((opcode >> 8) & 0xF);
+            auto sysm = opcode & 0xFF;
+
+            if((sysm >> 3) == 0)
+            {
+                // xPSR
+                uint32_t mask = 0;
+                if(sysm & 1) // IPSR
+                    mask |= 0x1FF;
+
+                // if(sysm & 2) // T bit reads as 0 so do nothing
+
+                if(sysm & 4) // APSR
+                    mask |= 0xF8000000;
+
+                reg(dstReg) = cpsr & mask;
+
+                return pcSCycles * 2 + 1;
+            }
+            else if((sysm >> 3) == 1)
+            {
+                // MSP/PSP
+                if(sysm == 8)
+                    reg(dstReg) = loReg(Reg::MSP);
+                else if(sysm == 9)
+                    reg(dstReg) = loReg(Reg::PSP);
+
+                return pcSCycles * 2 + 1;
+            }
+            else if((sysm >> 3) == 2)
+            {
+                // PRIMASK/CONTROL
+                if(sysm == 0x10)
+                    reg(dstReg) = primask & 1;
+                else if(sysm == 0x14)
+                    reg(dstReg) = control & 3;
+
+                return pcSCycles * 2 + 1;
+            }
+            break;
         }
     }
 
-    printf("Unhandled opcode %08X @%08X\n",opcode32, pc - 6);
+    printf("Unhandled branch/misc opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
+    exit(1);
+}
+
+int ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
+{
+    auto op1 = (opcode >> 21) & 7;
+    auto op2 = (opcode >> 6) & 0x3F;
+
+    printf("Unhandled store opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
+    exit(1);
+}
+
+
+int ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
+{
+    auto op1 = (opcode >> 23) & 3;
+    auto op2 = (opcode >> 6) & 0x3F;
+
+    printf("Unhandled load byte/hint opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
+    exit(1);
+}
+
+int ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
+{
+    auto op1 = (opcode >> 23) & 3;
+    auto op2 = (opcode >> 6) & 0x3F;
+
+    printf("Unhandled load half/hint opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
+    exit(1);
+}
+
+int ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
+{
+    auto op1 = (opcode >> 23) & 3;
+    auto op2 = (opcode >> 6) & 0x3F;
+
+    printf("Unhandled load word opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
+    exit(1);
+}
+
+int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
+{
+    auto op1 = (opcode >> 20) & 0xF;
+    auto op2 = (opcode >> 4) & 0xF;
+
+    printf("Unhandled dp reg opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
+    exit(1);
+}
+
+int ARMv6MCore::doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc)
+{
+    auto op1 = (opcode >> 20) & 7;
+    auto op2 = (opcode >> 4) & 3;
+
+    printf("Unhandled mul/diff opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
+    exit(1);
+}
+
+int ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
+{
+    auto op1 = (opcode >> 20) & 7;
+    auto op2 = (opcode >> 4) & 0xF;
+
+    printf("Unhandled long mul/div opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
     exit(1);
 }
 
