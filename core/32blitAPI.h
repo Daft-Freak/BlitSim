@@ -121,70 +121,70 @@ namespace blit {
 
         /*AudioChannel*/void *channels; // TODO
 
-        SurfaceInfo &(*set_screen_mode)  (ScreenMode new_mode);
-        void (*set_screen_palette)  (const Pen *colours, int num_cols);
-        uint32_t (*now)();
-        uint32_t (*random)();
-        void (*exit)(bool is_error);
+        uint32_t set_screen_mode;
+        uint32_t set_screen_palette;
+        uint32_t now;
+        uint32_t random;
+        uint32_t exit;
 
         // serial debug
-        void (*debug)(const char *message);
+        uint32_t debug;
 
         // files
-        void *(*open_file)(const std::string &file, int mode);
-        int32_t (*read_file)(void *fh, uint32_t offset, uint32_t length, char* buffer);
-        int32_t (*write_file)(void *fh, uint32_t offset, uint32_t length, const char* buffer);
-        int32_t (*close_file)(void *fh);
-        uint32_t (*get_file_length)(void *fh);
-        void (*list_files) (const std::string &path, std::function<void(FileInfo &)> callback);
-        bool (*file_exists) (const std::string &path);
-        bool (*directory_exists) (const std::string &path);
-        bool (*create_directory) (const std::string &path);
-        bool (*rename_file) (const std::string &old_name, const std::string &new_name);
-        bool (*remove_file) (const std::string &path);
-        const char *(*get_save_path)();
-        bool (*is_storage_available)();
+        uint32_t open_file;
+        uint32_t read_file;
+        uint32_t write_file;
+        uint32_t close_file;
+        uint32_t get_file_length;
+        uint32_t list_files;
+        uint32_t file_exists;
+        uint32_t directory_exists;
+        uint32_t create_directory;
+        uint32_t rename_file;
+        uint32_t remove_file;
+        uint32_t get_save_path;
+        uint32_t is_storage_available;
 
         // profiler
-        void (*enable_us_timer)();
-        uint32_t (*get_us_timer)();
-        uint32_t (*get_max_us_timer)();
+        uint32_t enable_us_timer;
+        uint32_t get_us_timer;
+        uint32_t get_max_us_timer;
 
         // jepg
-        JPEGImage (*decode_jpeg_buffer)(const uint8_t *ptr, uint32_t len, AllocateCallback alloc);
-        JPEGImage (*decode_jpeg_file)(const std::string &filename, AllocateCallback alloc);
+        uint32_t decode_jpeg_buffer;
+        uint32_t decode_jpeg_file;
 
         // launcher APIs - only intended for use by launchers and only available on device
-        bool (*launch)(const char *filename);
-        void (*erase_game)(uint32_t offset);
-        void *(*get_type_handler_metadata)(const char *filetype);
+        uint32_t launch;
+        uint32_t erase_game;
+        uint32_t get_type_handler_metadata;
 
-        const char *(*get_launch_path)();
+        uint32_t get_launch_path;
 
         // multiplayer
-        bool (*is_multiplayer_connected)();
-        void (*set_multiplayer_enabled)(bool enabled);
-        void (*send_message)(const uint8_t *data, uint16_t len);
-        void (*message_received)(const uint8_t *data, uint16_t len); // set by user
+        uint32_t is_multiplayer_connected;
+        uint32_t set_multiplayer_enabled;
+        uint32_t send_message;
+        uint32_t message_received; // set by user
 
-        const uint8_t *(*flash_to_tmp)(const std::string &filename, uint32_t &size);
-        void (*tmp_file_closed)(const uint8_t *ptr);
+        uint32_t flash_to_tmp;
+        uint32_t tmp_file_closed;
 
-        GameMetadata (*get_metadata)();
+        uint32_t get_metadata;
 
         bool tick_function_changed;
 
-        bool (*set_screen_mode_format)(ScreenMode new_mode, SurfaceTemplate &new_surf_template);
+        uint32_t set_screen_mode_format;
 
         // raw i2c access
-        bool (*i2c_send)(uint8_t address, uint8_t reg, const uint8_t *data, uint16_t len);
-        bool (*i2c_receive)(uint8_t address, uint8_t reg, uint8_t *data, uint16_t len);
-        void (*i2c_completed)(uint8_t address, uint8_t reg, const uint8_t *data, uint16_t len); // callback when done
+        uint32_t i2c_send;
+        uint32_t i2c_receive;
+        uint32_t i2c_completed; // callback when done
 
         // raw cdc
-        bool (*set_raw_cdc_enabled)(bool enabled);
-        void (*cdc_write)(const uint8_t *data, uint16_t len);
-        uint16_t (*cdc_read)(uint8_t *data, uint16_t len);
+        uint32_t set_raw_cdc_enabled;
+        uint32_t cdc_write;
+        uint32_t cdc_read;
     };
     #pragma pack(pop)
 }
