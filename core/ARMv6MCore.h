@@ -89,6 +89,9 @@ private:
     void writeMem16(uint32_t addr, uint16_t data, int &cycles, bool sequential = false);
     void writeMem32(uint32_t addr, uint32_t data, int &cycles, bool sequential = false);
 
+    inline bool inIT() {return itState & 0xF;}
+    void advanceIT();
+
     int executeTHUMBInstruction();
 
     int doTHUMB01MoveShifted(uint16_t opcode, uint32_t pc);
@@ -141,6 +144,9 @@ private:
 
     // internal state
     bool sleeping, eventFlag;
+
+    uint8_t itState = 0;
+    bool itStart = false;
 
     // exceptions
     uint64_t exceptionPending, exceptionActive;

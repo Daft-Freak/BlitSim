@@ -30,6 +30,8 @@ void ARMv6MCore::reset()
     sleeping = false;
     eventFlag = false;
 
+    itState = 0;
+
     clock.reset();
 
     exceptionActive = exceptionPending = 0;
@@ -82,6 +84,15 @@ unsigned int ARMv6MCore::update(uint64_t target)
         {
             // CPU
             exec = executeTHUMBInstruction();
+
+            // advance IT
+            // outside of executeTHUMBInstruction as it needs to be after executing the instruction...
+            if(inIT())
+            {
+                if(!itStart)
+                    advanceIT();
+                itStart = false;
+            }
         }
 
         // loop until not halted or DMA was triggered
@@ -276,6 +287,14 @@ void ARMv6MCore::writeMem32(uint32_t addr, uint32_t data, int &cycles, bool sequ
     mem.write<uint32_t>(addr, data, cycles, sequential);
 }
 
+void ARMv6MCore::advanceIT()
+{
+    if((itState & 7) == 0)
+        itState = 0; // done
+    else
+        itState = (itState & 0xE0) | ((itState << 1) & 0x1F);
+}
+
 int ARMv6MCore::executeTHUMBInstruction()
 {
     auto &pc = loReg(Reg::PC); // not a low reg, but not banked
@@ -294,6 +313,70 @@ int ARMv6MCore::executeTHUMBInstruction()
     {
         int tmp;
         fetchOp = mem.read<uint16_t>(pc, tmp, true);
+    }
+
+    if(inIT())
+    {
+        auto cond = itState >> 4;
+
+        // check condition
+        bool result = false;
+
+        switch(cond >> 1)
+        {
+            case 0: // EQ/NE
+                result = cpsr & Flag_Z;
+                break;
+            case 1: // CS/CC
+                result = cpsr & Flag_C;
+                break;
+            case 2: // MI/PL
+                result = cpsr & Flag_N;
+                break;
+            case 3: // VS/VC
+                result = cpsr & Flag_V;
+                break;
+            case 4: // HI/LS
+                result = (cpsr & Flag_C) && !(cpsr & Flag_Z);
+                break;
+            case 5: // GE/LT
+                result = !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
+                break;
+            case 6: // GT/LE
+                result = !!(cpsr & Flag_N) == !!(cpsr & Flag_V) && !(cpsr & Flag_Z);
+                break;
+            case 7: // AL
+                result = true;
+                break;
+        }
+
+        if((cond & 1) && cond != 0xF)
+            result = !result;
+
+        if(!result)
+        {
+            if((opcode >> 12) != 0xF || (opcode >> 11) == 0xF) //32bit
+            {
+                // skip second half
+                decodeOp = fetchOp;
+
+                pc += 2;
+                if(pcPtr)
+                {
+                    auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
+                    assert(mem.verifyPointer(thumbPCPtr, pc));
+                    fetchOp = *thumbPCPtr;
+                }
+                else
+                {
+                    int tmp;
+                    fetchOp = mem.read<uint16_t>(pc, tmp, true);
+                }
+
+                return pcSCycles * 2;
+            }
+            return pcSCycles;
+        }
     }
 
     switch(opcode >> 12)
@@ -370,10 +453,13 @@ int ARMv6MCore::doTHUMB01MoveShifted(uint16_t opcode, uint32_t pc)
 
     loReg(dstReg) = res;
 
-    cpsr = (cpsr & 0x1FFFFFFF)
-         | (res & signBit ? Flag_N : 0)
-         | (res == 0 ? Flag_Z : 0)
-         | carry;
+    if(!inIT())
+    {
+        cpsr = (cpsr & 0x1FFFFFFF)
+             | (res & signBit ? Flag_N : 0)
+             | (res == 0 ? Flag_Z : 0)
+             | carry;
+    }
 
     return pcSCycles;
 }
@@ -414,10 +500,13 @@ int ARMv6MCore::doTHUMB0102(uint16_t opcode, uint32_t pc)
 
         loReg(dstReg) = res;
 
-        cpsr |= (res & signBit ? Flag_N : 0)
-             | (res == 0 ? Flag_Z : 0)
-             | carry
-             | (overflow >> 3);
+        if(!inIT())
+        {
+            cpsr |= (res & signBit ? Flag_N : 0)
+                 | (res == 0 ? Flag_Z : 0)
+                 | carry
+                 | (overflow >> 3);
+        }
     }
     else // format 1, move shifted register
     {
@@ -439,10 +528,13 @@ int ARMv6MCore::doTHUMB0102(uint16_t opcode, uint32_t pc)
 
         loReg(dstReg) = res;
 
-        cpsr = (cpsr & 0x1FFFFFFF)
-             | (res & signBit ? Flag_N : 0)
-             | (res == 0 ? Flag_Z : 0)
-             | carry;
+        if(!inIT())
+        {
+            cpsr = (cpsr & 0x1FFFFFFF)
+                 | (res & signBit ? Flag_N : 0)
+                 | (res == 0 ? Flag_Z : 0)
+                 | carry;
+        }
     }
 
     return pcSCycles;
@@ -463,7 +555,8 @@ int ARMv6MCore::doTHUMB03(uint16_t opcode, uint32_t pc)
     {
         case 0: // MOV
             loReg(dstReg) = offset;
-            cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (offset == 0 ? Flag_Z : 0); // N not possible
+            if(!inIT())
+                cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (offset == 0 ? Flag_Z : 0); // N not possible
             break;
         case 1: // CMP
             res = dst - offset;
@@ -475,13 +568,15 @@ int ARMv6MCore::doTHUMB03(uint16_t opcode, uint32_t pc)
             loReg(dstReg) = res = dst + offset;
             carry = res < dst ? Flag_C : 0;
             overflow = (~dst & res) & signBit;
-            cpsr = (cpsr & ~(Flag_N | Flag_Z | Flag_C | Flag_V)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
+            if(!inIT())
+                cpsr = (cpsr & ~(Flag_N | Flag_Z | Flag_C | Flag_V)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
             break;
         case 3: // SUB
             loReg(dstReg) = res = dst - offset;
             carry = !(res > dst) ? Flag_C : 0;
             overflow = (dst & ~res) & signBit;
-            cpsr = (cpsr & ~(Flag_N | Flag_Z | Flag_C | Flag_V)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
+            if(!inIT())
+                cpsr = (cpsr & ~(Flag_N | Flag_Z | Flag_C | Flag_V)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
             break;
         default:
             __builtin_unreachable();
@@ -516,11 +611,13 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
     {
         case 0x0: // AND
             loReg(dstReg) = res = op1 & op2;
-            cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
+            if(!inIT())
+                cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
             break;
         case 0x1: // EOR
             loReg(dstReg) = res = op1 ^ op2;
-            cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
+            if(!inIT())
+                cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
             break;
         case 0x2: // LSL
             carry = cpsr & Flag_C;
@@ -539,7 +636,8 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             else
                 loReg(dstReg) = res = op1;
 
-            cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
+            if(!inIT())
+                cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
             break;
         case 0x3: // LSR
             carry = cpsr & Flag_C;
@@ -558,7 +656,8 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             else
                 loReg(dstReg) = res = op1;
 
-            cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
+            if(!inIT())
+                cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
             break;
         case 0x4: // ASR
         {
@@ -579,7 +678,8 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             else
                 loReg(dstReg) = res = op1;
 
-            cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
+            if(!inIT())
+                cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
             break;
         }
         case 0x5: // ADC
@@ -588,7 +688,8 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             loReg(dstReg) = res = op1 + op2 + c;
             carry = res < op1 || (res == op1 && c) ? Flag_C : 0;
             overflow = ~((op1 ^ op2) & signBit) & ((op1 ^ res) & signBit);
-            cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
+            if(!inIT())
+                cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
             break;
         }
         case 0x6: // SBC
@@ -597,7 +698,8 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             loReg(dstReg) = res = op1 - op2 + c - 1;
             carry = !(op2 > op1 || (op2 == op1 && !c)) ? Flag_C : 0;
             overflow = ((op1 ^ op2) & signBit) & ((op1 ^ res) & signBit);
-            cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
+            if(!inIT())
+                cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
             break;
         }
         case 0x7: // ROR
@@ -610,7 +712,8 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             if(op2)
                 carry = res & (1 << 31) ? Flag_C : 0;
 
-            cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
+            if(!inIT())
+                cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
             return pcSCycles + 1;
         }
         case 0x8: // TST
@@ -622,7 +725,8 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             loReg(dstReg) = res = 0 - op2;
             carry = !(op2 > 0) ? Flag_C : 0; //?
             overflow = (op2 & signBit) & (res & signBit);
-            cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
+            if(!inIT())
+                cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
             break;
         }
         case 0xA: // CMP
@@ -639,23 +743,27 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
             break;
         case 0xC: // ORR
             loReg(dstReg) = res = op1 | op2;
+            if(!inIT())
             cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
-            break;
+                break;
         case 0xD: // MUL
         {
             // carry is meaningless, v is unaffected
             loReg(dstReg) = res = op1 * op2;
-            cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
+            if(!inIT())
+                cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
 
             break; // single-cycle multiply
         }
         case 0xE: // BIC
             loReg(dstReg) = res = op1 & ~op2;
-            cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
+            if(!inIT())
+                cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
             break;
         case 0xF: // MVN
             loReg(dstReg) = res = ~op2;
-            cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
+            if(!inIT())
+                cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
             break;
     }
 
@@ -1030,11 +1138,18 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
             exit(1);
             return pcSCycles;
 
-        case 0xF: // hints
+        case 0xF:
         {
             auto opA = (opcode >> 4) & 0xF;
             auto opB = opcode & 0xF;
-            if(opB == 0)
+
+            if(opB != 0) // IT
+            {
+                itState = opcode & 0xFF;
+                itStart = true;
+                return pcSCycles;
+            }
+            else // hints
             {
                 switch(opA)
                 {
