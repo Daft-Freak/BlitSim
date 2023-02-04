@@ -14,6 +14,9 @@ public:
     unsigned int run(int ms);
     unsigned int update(uint64_t target);
 
+    void setSP(uint32_t val);
+    void runCall(uint32_t addr, uint32_t r0 = 0);
+
     void setPendingIRQ(int n);
     void setEvent();
 

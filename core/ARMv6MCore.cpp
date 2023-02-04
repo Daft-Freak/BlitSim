@@ -127,6 +127,47 @@ unsigned int ARMv6MCore::update(uint64_t target)
     return cycles;
 }
 
+void ARMv6MCore::setSP(uint32_t val)
+{
+    reg(Reg::SP) = val;
+}
+
+void ARMv6MCore::runCall(uint32_t addr, uint32_t r0)
+{
+    // TODO: save/restore state for faked interrupts?
+
+    loReg(Reg::R0) = r0;
+
+    // fake a BL
+    loReg(Reg::LR) = 0x8FFFFFF; // somewhere invalid in flash
+    updateTHUMBPC(addr & ~ 1);
+
+    while(loReg(Reg::PC) != 0x8FFFFFE + 2)
+    {
+        uint32_t exec = 1;
+
+        if(!sleeping)
+        {
+            // CPU
+            exec = executeTHUMBInstruction();
+
+            // advance IT
+            // outside of executeTHUMBInstruction as it needs to be after executing the instruction...
+            if(inIT())
+            {
+                if(!itStart)
+                    advanceIT();
+                itStart = false;
+            }
+        }
+
+        // update systick if using cpu clock
+        uint32_t mask = (1 << 0)/*ENABLE*/ | (1 << 2)/*CLKSOURCE*/;
+        if((sysTickRegs[0]/*SYST_CSR*/ & mask) == mask)
+            updateSysTick(exec);
+    }
+}
+
 void ARMv6MCore::setPendingIRQ(int n)
 {
     exceptionPending |= 1ull << (n + 16);
