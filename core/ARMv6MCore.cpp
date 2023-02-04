@@ -1634,8 +1634,10 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
     auto op1 = (opcode >> 20) & 0x7F;
     auto op2 = (opcode >> 12) & 0x7;
 
-    if((op2 & 0b101) == 0b101) // BL
+    if((op2 & 1)) // B/BL
     {
+        bool link = (op2 & 0b100);
+
         auto imm11 = opcode & 0x7FF;
         auto imm10 = (opcode >> 16) & 0x3FF;
 
@@ -1654,13 +1656,14 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
         if(s)
             offset |= 0xFF000000; // sign extend
 
-        loReg(Reg::LR) = (pc - 2) | 1; // magic switch to thumb bit...
+        if(link)
+            loReg(Reg::LR) = (pc - 2) | 1; // magic switch to thumb bit...
         updateTHUMBPC((pc - 2) + offset);
 
         return pcNCycles + pcSCycles * 3;
     }
 
-    assert((op2 & 0b101) == 0);
+    assert((op2 & 0b100) == 0);
 
     switch(op1)
     {
