@@ -1980,7 +1980,6 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
 {
     // called when PC is updated in THUMB mode (except for incrementing)
     assert(!(pc & 1));
-    assert(pc < 0x40000000);
 
     if(pcPtr && pc >> 24 == loReg(Reg::PC) >> 24)
     {
