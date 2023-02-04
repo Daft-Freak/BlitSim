@@ -199,6 +199,9 @@ int main(int argc, char *argv[])
 
     uint32_t cpuCycles = 0;
 
+    cpuCore.setSP(0x20020000); // end of DTCM
+    cpuCore.runCall(blitHeader.init);
+
     while(!quit)
     {
         pollEvents();
@@ -211,7 +214,7 @@ int main(int argc, char *argv[])
         if(elapsed > 30)
             elapsed = 30;
 
-        cpuCycles += cpuCore.run(elapsed);
+        //cpuCycles += cpuCore.run(elapsed);
 
         lastTick = now;
 
