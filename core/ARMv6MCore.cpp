@@ -2126,6 +2126,9 @@ int ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
             return cycles;
         }
     }
+
+    printf("Unhandled load byte/hint opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
+    exit(1);
 }
 
 int ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
