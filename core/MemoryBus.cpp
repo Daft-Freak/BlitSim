@@ -4,6 +4,7 @@
 
 #include "MemoryBus.h"
 
+#include "32blitAPI.h"
 #include "ARMv6MCore.h"
 
 bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic)
@@ -46,6 +47,18 @@ MemoryBus::MemoryBus()
 
 void MemoryBus::reset()
 {
+    auto api = reinterpret_cast<blit::API *>(mapAddress(0xF800));
+
+    *api = {};
+    api->version_major = blit::api_version_major;
+    api->version_minor = blit::api_version_minor;
+
+    // fake addresses in flash region
+    api->set_screen_mode = 0x08BA0001;
+    api->set_screen_palette = 0x08BA0003;
+    api->now = 0x08BA0005;
+    api->random = 0x08BA0007;
+    api->exit = 0x08BA0009;
 }
 
 template<class T>

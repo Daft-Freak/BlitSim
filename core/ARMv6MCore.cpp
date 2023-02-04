@@ -2022,6 +2022,12 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
     // called when PC is updated in THUMB mode (except for incrementing)
     assert(!(pc & 1));
 
+    if(pc >> 16 == 0x08BA)
+    {
+        printf("blit API %08X\n", pc);
+        return; // leave PC where it was
+    }
+
     if(pcPtr && pc >> 24 == loReg(Reg::PC) >> 24)
     {
         // memory region didn't change, skip recaclculating ptr/cycles
