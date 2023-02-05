@@ -2236,9 +2236,7 @@ int ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
 
         auto offset = (opcode & 0xFFF);
 
-        uint32_t addr = pc;
-        if(addr & 2)
-            addr += 2; // align
+        uint32_t addr = pc & ~2;
         
         if(add)
             addr += offset;
