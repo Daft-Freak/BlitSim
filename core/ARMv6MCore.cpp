@@ -2328,7 +2328,11 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
     if(pc >> 16 == 0x08BA)
     {
         printf("blit API %08X\n", pc);
-        return; // leave PC where it was
+
+        // fake the return (if this isn't a BL)
+        if(loReg(Reg::PC) != (loReg(Reg::LR) & ~1))
+            updateTHUMBPC(loReg(Reg::LR) & ~1);
+        return;
     }
 
     if(pcPtr && pc >> 24 == loReg(Reg::PC) >> 24)
