@@ -1864,6 +1864,79 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
 
     assert((op2 & 0b100) == 0);
 
+    if((op1 & 0b111000) != 0b111000) // B
+    {
+        auto cond = (op2 >> 2) & 0xF;
+
+        auto imm11 = opcode & 0x7FF;
+        auto imm6 = (opcode >> 16) & 0x3F;
+
+        auto s = opcode & (1 << 26);
+        auto i1 = (opcode >> 13) & 1;
+        auto i2 = (opcode >> 11) & 1;
+
+        uint32_t offset = imm11 << 1 | imm6 << 12 | i2 << 18 | i1 << 19;
+
+        if(s)
+            offset |= 0xFFF00000; // sign extend
+
+        bool condVal = false;
+        switch(cond)
+        {
+            case 0x0: // BEQ
+                condVal = cpsr & Flag_Z;
+                break;
+            case 0x1: // BNE
+                condVal = !(cpsr & Flag_Z);
+                break;
+            case 0x2: // BCS
+                condVal = cpsr & Flag_C;
+                break;
+            case 0x3: // BCC
+                condVal = !(cpsr & Flag_C);
+                break;
+            case 0x4: // BMI
+                condVal = cpsr & Flag_N;
+                break;
+            case 0x5: // BPL
+                condVal = !(cpsr & Flag_N);
+                break;
+            case 0x6: // BVS
+                condVal = cpsr & Flag_V;
+                break;
+            case 0x7: // BVC
+                condVal = !(cpsr & Flag_V);
+                break;
+            case 0x8: // BHI
+                condVal = (cpsr & Flag_C) && !(cpsr & Flag_Z);
+                break;
+            case 0x9: // BLS
+                condVal = !(cpsr & Flag_C) || (cpsr & Flag_Z);
+                break;
+            case 0xA: // BGE
+                condVal = !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
+                break;
+            case 0xB: // BLT
+                condVal = !!(cpsr & Flag_N) != !!(cpsr & Flag_V);
+                break;
+            case 0xC: // BGT
+                condVal = !(cpsr & Flag_Z) && !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
+                break;
+            case 0xD: // BLE
+                condVal = (cpsr & Flag_Z) || !!(cpsr & Flag_N) != !!(cpsr & Flag_V);
+                break;
+        }
+
+        if(condVal)
+        {
+            updateTHUMBPC((pc - 2) + offset);
+
+            return pcNCycles + pcSCycles * 3;
+        }
+
+        return pcSCycles * 2;
+    }
+
     switch(op1)
     {
         case 0x38: // MSR
