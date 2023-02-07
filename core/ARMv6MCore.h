@@ -118,6 +118,7 @@ private:
     int doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc);
 
     uint32_t getShiftedReg(uint32_t opcode, bool &carry);
+    int doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool carry, bool setFlags);
 
     int doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc);
     int doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc);
