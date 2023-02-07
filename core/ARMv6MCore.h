@@ -85,6 +85,12 @@ private:
     uint32_t loReg(Reg r) const {return regs[static_cast<int>(r)];}
     uint32_t &loReg(Reg r) {return regs[static_cast<int>(r)];}
 
+    float sReg(int r) const {return reinterpret_cast<const float *>(fpRegs)[r];}
+    float &sReg(int r) {return reinterpret_cast<float *>(fpRegs)[r];}
+
+    double dReg(int r) const {return reinterpret_cast<const double *>(fpRegs)[r];}
+    double &dReg(int r) {return reinterpret_cast<double *>(fpRegs)[r];}
+
     uint8_t readMem8(uint32_t addr, int &cycles, bool sequential = false);
     uint16_t readMem16(uint32_t addr, int &cycles, bool sequential = false);
     uint32_t readMem32(uint32_t addr, int &cycles, bool sequential = false);
@@ -151,6 +157,9 @@ private:
     uint32_t regs[17]{};
     uint32_t cpsr;
     uint32_t primask, control;
+
+    uint32_t fpRegs[32]; // 32x float/16x double
+    uint32_t fpscr;
 
     Reg curSP = Reg::SP;
 
