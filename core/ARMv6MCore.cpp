@@ -1869,7 +1869,7 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
 
     if((op1 & 0b111000) != 0b111000) // B
     {
-        auto cond = (op2 >> 2) & 0xF;
+        auto cond = (op1 >> 2) & 0xF;
 
         auto imm11 = opcode & 0x7FF;
         auto imm6 = (opcode >> 16) & 0x3F;
