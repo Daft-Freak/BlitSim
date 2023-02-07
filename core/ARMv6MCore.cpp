@@ -1983,9 +1983,508 @@ int ARMv6MCore::doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t p
 
 int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
 {
-    auto op = opcode & (1 << 4);
+    bool op = opcode & (1 << 4);
     auto coproc = (opcode >> 8) & 0xF;
     auto op1 = (opcode >> 20) & 0x3F;
+
+    int cycles = pcSCycles * 2;
+
+    if(coproc != 0xA && coproc != 0xB) // VFP
+    {
+        printf("Unhandled coprocessor %X (opcode %08X) @%08X\n", coproc, opcode, pc - 6);
+        exit(1);
+    }
+
+    bool dWidth = coproc & 1;
+
+    auto expandImm = [](uint8_t imm8, int width)
+    {
+        int e = width == 32 ? 8 : 11;
+        int f = width - e - 1;
+
+        auto eMask = ((1 << (e - 1)) - 1) & ~ 3;
+
+        bool sign = imm8 & 0x80;
+        auto exp = ((~imm8 << 1) & 0x80) | ((imm8 & 0x40) ? eMask  : 0)| ((imm8 >> 4) & 3);
+        auto frac = (imm8 & 0xF) << (f - 4);
+
+        return (sign ? 1ULL : 0ULL) << (e + f) | static_cast<uint64_t>(exp) << f | frac;
+    };
+
+    auto getVReg = [opcode](int pos, int hiLoPos, bool dWidth)
+    {
+        if(dWidth) // n nnnn
+            return ((opcode >> pos) & 0xF) | ((opcode >> (hiLoPos - 4)) & 0x10);
+        
+        // nnnn n
+        if(pos == 0)
+            return ((opcode << 1) & 0x1E) | ((opcode >> hiLoPos) & 1);
+        
+        return ((opcode >> (pos - 1)) & 0x1E) | ((opcode >> hiLoPos) & 1);
+    };
+
+    if(op)
+    {
+        auto a = (op1 >> 1) & 7;
+        bool c = dWidth;
+        auto b = (opcode >> 5) & 3;
+
+        if((op1 & 0x31) == 0x20) // move to coprocessor
+        {
+            if(c & !b) // VMOV to scalar
+            {}
+            else if(a == 7) // VMSR
+            {}
+            else if(a == 0) // VMOV
+            {
+                assert((opcode & 0x6F) == 0);
+
+                auto tReg = static_cast<Reg>((opcode >> 12) & 0xF);
+                auto n = getVReg(16, 7, false);
+
+                fpRegs[n] = loReg(tReg);
+                return cycles;
+            }
+        }
+        else if((op1 & 0x31) == 0x21) // move from coprocessor
+        {
+            if(c && !b) // VMOV from scalar
+            {}
+            else if(a == 7) // VMRS
+            {
+                assert((opcode & 0xF00FF) == 0x10010);
+                auto tReg = static_cast<Reg>((opcode >> 12) & 0xF);
+
+                // transfer flags
+                if(tReg == Reg::PC)
+                    cpsr = (cpsr & 0x0FFFFFFF) | (fpscr & 0xF0000000);
+                else
+                    loReg(tReg) = fpscr;
+
+                return cycles;
+            }
+            else if(a == 0) // VMOV
+            {
+                assert((opcode & 0x6F) == 0);
+
+                auto tReg = static_cast<Reg>((opcode >> 12) & 0xF);
+                auto n = getVReg(16, 7, false);
+
+                loReg(tReg) = fpRegs[n];
+                return cycles;
+            }
+        }
+    }
+    else if(!op)
+    {
+        if((op1 & 0x30) == 0x20) // coprocessor data ops
+        {
+            bool t = opcode & (1 << 28);
+            auto opc1 = op1 & 0xF;
+            auto opc2 = (opcode >> 16) & 0xF;
+            auto opc3 = (opcode >> 6) & 3;
+            auto opc4 = opcode & 0xF;
+
+            if(t)
+            {}
+            else
+            {
+                switch(opc1 & 0b1011)
+                {
+                    case 0b0010:
+                    {
+                        if(opc3 & 1) //VNM*
+                        {}
+                        else // VMUL
+                        {
+                            auto n = getVReg(16, 7, dWidth);
+                            auto d = getVReg(12, 22, dWidth);
+                            auto m = getVReg(0, 5, dWidth);
+
+                            if(dWidth)
+                                dReg(d) = dReg(n) * dReg(m);
+                            else
+                                sReg(d) = sReg(n) * sReg(m);
+
+                            return cycles;
+                        }
+                        break;
+                    }
+                    case 0b0011:
+                    {
+                        auto n = getVReg(16, 7, dWidth);
+                        auto d = getVReg(12, 22, dWidth);
+                        auto m = getVReg(0, 5, dWidth);
+
+                        if(opc3 & 1) // VSUB
+                        {
+                            if(dWidth)
+                                dReg(d) = dReg(n) - dReg(m);
+                            else
+                                sReg(d) = sReg(n) - sReg(m);
+                        }
+                        else // VADD
+                        {
+                            if(dWidth)
+                                dReg(d) = dReg(n) + dReg(m);
+                            else
+                                sReg(d) = sReg(n) + sReg(m);
+                        }
+
+                        return cycles;
+                    }
+
+                    case 0b1000: // VDIV
+                    {
+                        assert(!(opc3 & 1));
+                        auto n = getVReg(16, 7, dWidth);
+                        auto d = getVReg(12, 22, dWidth);
+                        auto m = getVReg(0, 5, dWidth);
+
+                        if(dWidth)
+                            dReg(d) = dReg(n) / dReg(m);
+                        else
+                            sReg(d) = sReg(n) / sReg(m);
+
+                        return cycles;
+                    }
+
+                    case 0b1001: // VFNMA/VFNMS
+                    {
+                        bool isSub = opcode & (1 << 6);
+
+                        auto n = getVReg(16, 7, dWidth);
+                        auto d = getVReg(12, 22, dWidth);
+                        auto m = getVReg(0, 5, dWidth);
+
+                        if(dWidth)
+                        {
+                            auto op1 = dReg(n);
+                            if(isSub)
+                                op1 = -op1;
+
+                            dReg(d) = -dReg(d) + op1 * dReg(m);
+                        }
+                        else
+                        {
+                            auto op1 = sReg(n);
+                            if(isSub)
+                                op1 = -op1;
+
+                            sReg(d) = -sReg(d) + op1 * sReg(m);
+                        }
+                        return cycles;
+                    }
+
+                    case 0b1010: // VFMA/VFMS
+                    {
+                        bool isSub = opcode & (1 << 6);
+
+                        auto n = getVReg(16, 7, dWidth);
+                        auto d = getVReg(12, 22, dWidth);
+                        auto m = getVReg(0, 5, dWidth);
+
+                        if(dWidth)
+                        {
+                            auto op1 = dReg(n);
+                            if(isSub)
+                                op1 = -op1;
+
+                            dReg(d) = dReg(d) + op1 * dReg(m);
+                        }
+                        else
+                        {
+                            auto op1 = sReg(n);
+                            if(isSub)
+                                op1 = -op1;
+
+                            sReg(d) = sReg(d) + op1 * sReg(m);
+                        }
+                        return cycles;
+                    }
+                    case 0b1011:
+                    {
+                        if((opc3 & 1) == 0) // VMOV (immediate)
+                        {
+                            auto imm = opc4 | opc2 << 4;
+
+                            auto d = getVReg(12, 22, dWidth);
+
+                            if(dWidth)
+                            {
+                                //expandImm(imm, 64);
+                                //...
+                            }
+                            else
+                            {
+                                uint32_t imm32 = expandImm(imm, 32);
+                                fpRegs[d] = imm32;
+                                return cycles;
+                            }
+                        }
+                        else if(opc2 == 0)
+                        {
+                            if(opc3 == 1) // VMOV (register)
+                            {
+                                auto d = getVReg(12, 22, dWidth);
+                                auto m = getVReg(0, 5, dWidth);
+
+                                if(dWidth)
+                                    dReg(d) = sReg(m);
+                                else
+                                    fpRegs[d] = fpRegs[m];
+
+                                return cycles;
+                            }
+                            // 3 = VABS
+                        }
+                        else if(opc2 == 1)
+                        {
+                            auto d = getVReg(12, 22, dWidth);
+                            auto m = getVReg(0, 5, dWidth);
+
+                            if(opc3 == 1) // VNEG
+                            {
+                                if(dWidth)
+                                    dReg(d) = -dReg(m);
+                                else
+                                    sReg(d) = -sReg(m);
+                            }
+                            else // VSQRT
+                            {
+                                if(dWidth)
+                                    dReg(d) = sqrt(dReg(m));
+                                else
+                                    sReg(d) = sqrtf(sReg(m));
+                            }
+                            return cycles;
+                        }
+                        else if(opc2 == 4 || opc2 == 5) // VCMP(E)
+                        {
+                            //bool e = opcode & (1 << 7); // nans
+                            bool withZero = opcode & (1 << 16);
+
+                            auto d = getVReg(12, 22, dWidth);
+
+                            if(dWidth)
+                            {}
+                            else
+                            {
+                                float val = 0.0f;
+
+                                if(withZero)
+                                    assert((opcode & 0x2F) == 0);
+                                else
+                                {
+                                    auto m = getVReg(0, 5, dWidth);
+                                    val = sReg(m);
+                                }
+
+                                if(sReg(d) == val)
+                                    fpscr = (fpscr & 0x0FFFFFFF) | Flag_C | Flag_Z;
+                                else if(sReg(d) < val)
+                                    fpscr = (fpscr & 0x0FFFFFFF) | Flag_N;
+                                else
+                                    fpscr = (fpscr & 0x0FFFFFFF) | Flag_C;
+
+                                return cycles;
+                            }
+                        }
+                        else if(opc2 == 7 && opc3 == 3) // VCVT (single <-> double)
+                        {
+                            auto d = getVReg(12, 22, !dWidth);
+                            auto m = getVReg(0, 5, dWidth);
+
+                            if(dWidth) // D -> S
+                                sReg(d) = dReg(m);
+                            else // S -> D
+                                dReg(d) = sReg(m);
+
+                            return cycles;
+                        }
+                        else if(opc2 == 8) // VCVT (int -> fp)
+                        {
+                            //bool toInt = false; // opc2 & 4;
+                            bool isUnsigned = opcode & (1 << 7);
+                            // TODO: rounding mode
+
+                            auto d = getVReg(12, 22, dWidth);
+                            auto m = getVReg(0, 5, false);
+
+                            if(dWidth)
+                            {
+                                if(isUnsigned)
+                                    dReg(d) = fpRegs[m];
+                                else
+                                    dReg(d) = static_cast<int32_t>(fpRegs[m]);
+                            }
+                            else
+                            {
+                                if(isUnsigned)
+                                    sReg(d) = fpRegs[m];
+                                else
+                                    sReg(d) = static_cast<int32_t>(fpRegs[m]);
+                            }
+
+                            return cycles;
+                        }
+                        else if(opc2 == 0xC || opc2 == 0xD) // VCVT (fp -> int)
+                        {
+                            bool isUnsigned = !(opc2 & 1);
+                            // TODO: rounding mode (1 << 7)
+
+                            auto d = getVReg(12, 22, false);
+                            auto m = getVReg(0, 5, dWidth);
+
+                            if(dWidth)
+                            {
+                                if(isUnsigned)
+                                    fpRegs[d] = static_cast<uint32_t>(dReg(m));
+                                else
+                                    fpRegs[d] = static_cast<int32_t>(dReg(m));
+                            }
+                            else
+                            {
+                                if(isUnsigned)
+                                    fpRegs[d] = static_cast<uint32_t>(sReg(m));
+                                else
+                                    fpRegs[d] = static_cast<int32_t>(sReg(m));
+                            }
+
+                            return cycles;
+                        }
+                        break;
+                    }
+                }
+            }
+
+            printf("cdp %x %x %x %x %x\n", t, opc1, opc2, opc3, opc4);
+        }
+    }
+
+    if(op1 == 4) // move to coprocessor from two arm regs
+    {}
+    else if(op1 == 5) // move to two arm regs from coprocessor
+    {}
+    else if((op1 & 0x21) == 1) // load coprocessor
+    {
+        bool t2 = opcode & (1 << 28);
+
+        bool index = opcode & (1 << 24);
+        bool add = opcode & (1 << 23);
+        //bool d = opcode & (1 << 22);
+        bool writeback = opcode & (1 << 21);
+
+        assert(!t2);
+
+        auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
+        auto d = getVReg(12, 22, dWidth);
+
+        auto imm = (opcode & 0xFF) << 2;
+
+        int regs = (opcode & 0xFF);
+
+        if(index && !writeback) // VLDR
+            regs = 1;
+        else // VLDM
+        {
+            assert(!(index == add && writeback));
+
+            if(dWidth)
+            {
+                assert(!(regs & 1)); // FLDMX
+                regs /= 2;
+            }
+        }
+
+        uint32_t offsetAddr = loReg(baseReg);
+
+        // align PC for literal load
+        if(baseReg == Reg::PC)
+            offsetAddr = (offsetAddr - 2) & ~2;
+
+        if(add)
+            offsetAddr += imm;
+        else
+            offsetAddr -= imm;
+
+        uint32_t addr = index ? offsetAddr : loReg(baseReg);
+
+        if(writeback)
+            loReg(baseReg) = offsetAddr;
+            
+        for(int i = 0; i < regs; i++)
+        {
+            if(dWidth)
+            {
+                fpRegs[(d + i) * 2] = readMem32(addr, cycles);
+                fpRegs[(d + i) * 2 + 1] = readMem32(addr + 4, cycles);
+                addr += 8;
+            }
+            else
+            {
+                fpRegs[d + i] = readMem32(addr, cycles);
+                addr += 4;
+            }
+        }
+
+        return cycles;
+    }
+    else if((op1 & 0x21) == 0) // store coprocessor
+    {
+        bool t2 = opcode & (1 << 28);
+
+        bool index = opcode & (1 << 24);
+        bool add = opcode & (1 << 23);
+        //bool n = opcode & (1 << 22);
+        bool writeback = opcode & (1 << 21);
+
+        assert(!t2 && index);
+
+        auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
+        auto d = getVReg(12, 22, dWidth);
+
+        auto imm = (opcode & 0xFF) << 2;
+
+        int regs = (opcode & 0xFF);
+
+        if(index && !writeback) // VSTR
+            regs = 1;
+        else // VSTM
+        {
+            assert(!(index == add && !writeback));
+
+            if(dWidth)
+            {
+                assert(!(regs & 1)); // FSTMX
+                regs /= 2;
+            }
+        }
+
+        uint32_t offsetAddr = add ? loReg(baseReg) + imm : loReg(baseReg) - imm;
+
+        uint32_t addr = index ? offsetAddr : loReg(baseReg);
+
+        if(writeback)
+            loReg(baseReg) = offsetAddr;
+            
+        for(int i = 0; i < regs; i++)
+        {
+            if(dWidth)
+            {
+                writeMem32(addr, fpRegs[(d + i) * 2], cycles);
+                writeMem32(addr + 4, fpRegs[(d + i) * 2 + 1], cycles);
+                addr += 8;
+            }
+            else
+            {
+                writeMem32(addr, fpRegs[d + i], cycles);
+                addr += 4;
+            }
+        }
+
+        return cycles;
+    }
 
     printf("Unhandled coprocessor opcode %08X (%X %X %X) @%08X\n", opcode, op, coproc, op1, pc - 6);
     exit(1);
