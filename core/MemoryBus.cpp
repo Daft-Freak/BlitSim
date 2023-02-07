@@ -195,8 +195,10 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
         case Region_D1:
             return d1RAM + (addr & 0x7FFFF);
 
-        //case Region_D2:
-        //    return d2RAM + (addr & 0);
+        case Region_D2:
+            if((addr & 0x7FFFF) < sizeof(d2RAM))
+                return d2RAM + (addr & 0x7FFFF);
+            break;
 
         //case Region_D3_Backup:
         //    return d3RAM + (addr & 0);
