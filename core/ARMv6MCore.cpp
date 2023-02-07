@@ -2041,6 +2041,46 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
 {
     auto op = (opcode >> 21) & 0xF;
 
+    assert(!(opcode & (1 << 20))); // S = 0
+
+    auto nReg = static_cast<Reg>((opcode >> 16) & 0xF);
+    auto dstReg = static_cast<Reg>((opcode >> 8) & 0xF);
+
+    switch(op)
+    {
+        case 0x0:
+        {
+            if(nReg == Reg::PC) // ADR
+            {}
+            else // ADDW
+            {
+                auto imm = ((opcode >> 15) & 0x800) | ((opcode >> 4) & 0x700) | (opcode & 0xFF);
+
+                loReg(dstReg) = loReg(nReg) + imm;
+                return pcSCycles * 2;
+            }
+            break;
+        }
+        case 0x2: // MOVW
+        {
+            auto imm = ((opcode >> 4) & 0xF000) |((opcode >> 15) & 0x800) | ((opcode >> 4) & 0x700) | (opcode & 0xFF);
+
+            loReg(dstReg) = imm;
+            return pcSCycles * 2;
+        }
+        case 0xE: // UBFX
+        {
+            int lsbit = ((opcode >> 10) & 0x1C) | ((opcode >> 6) & 3);
+            int width = (opcode & 0x1F) + 1;
+
+            auto mask = (1 << width) - 1;
+
+            loReg(dstReg) = (loReg(nReg) >> lsbit) & mask;
+            
+            return pcSCycles * 2;
+        }
+    }
+
     printf("Unhandled dp plain imm opcode %08X (%X) @%08X\n", opcode, op, pc - 6);
     exit(1);
 }
@@ -2589,6 +2629,44 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 20) & 0xF;
     auto op2 = (opcode >> 4) & 0xF;
+
+    auto nReg = static_cast<Reg>((opcode >> 16) & 0xF);
+
+    if(op2 & 0b1000)
+    {
+        if(op1 == 4)
+        {
+            if(nReg == Reg::PC) // SXTB
+            {
+            }
+            else // SXTAB
+            {
+                auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
+                auto mReg = static_cast<Reg>(opcode & 0xF);
+                int rotation = (opcode >> 1) & 0x18;
+
+                auto val = (loReg(mReg) >> rotation) | (loReg(mReg) << (32 - rotation));
+                val = (val & 0x80) ? val | 0xFFFFFF00 : val & 0xFF;
+                loReg(dReg) = loReg(nReg) + val;
+
+                return pcSCycles * 2;
+            }
+        }
+        else if(op1 == 5)
+        {
+            if(nReg == Reg::PC) // UXTB
+            {
+                auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
+                auto mReg = static_cast<Reg>(opcode & 0xF);
+                int rotation = (opcode >> 1) & 0x18;
+
+                auto val = (loReg(mReg) >> rotation) | (loReg(mReg) << (32 - rotation));
+                loReg(dReg) = val & 0xFF;
+
+                return pcSCycles * 2;
+            }
+        }
+    }
 
     printf("Unhandled dp reg opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
     exit(1);
