@@ -131,8 +131,8 @@ static bool parseBlit(std::ifstream &file)
 
 int main(int argc, char *argv[])
 {
-    int screenWidth = 240;
-    int screenHeight = 240;
+    int screenWidth = 160;
+    int screenHeight = 120;
     int screenScale = 5;
 
     std::string romFilename;
@@ -178,6 +178,8 @@ int main(int argc, char *argv[])
     
     cpuCore.reset();
 
+    auto screenData = mem.mapAddress(0x3000FC00); // framebuffer
+
     // SDL init
     if(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_AUDIO) != 0)
     {
@@ -193,11 +195,10 @@ int main(int argc, char *argv[])
     SDL_RenderSetLogicalSize(renderer, screenWidth, screenHeight);
     SDL_RenderSetIntegerScale(renderer, SDL_TRUE);
 
-    auto texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_BGR565, SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
+    auto texture = SDL_CreateTexture(renderer, SDL_PIXELFORMAT_RGB24, SDL_TEXTUREACCESS_STREAMING, screenWidth, screenHeight);
 
     auto lastTick = SDL_GetTicks();
-
-    uint32_t cpuCycles = 0;
+    auto lastRender = lastTick;
 
     cpuCore.setSP(0x20020000); // end of DTCM
     cpuCore.runCall(blitHeader.init);
@@ -208,20 +209,20 @@ int main(int argc, char *argv[])
 
         auto now = SDL_GetTicks();
 
-        auto elapsed = now - lastTick;
+        if(now - lastRender >= 20)
+        {
+            cpuCore.runCall(blitHeader.render, now);
+            lastRender = now;
 
-        // clamp if running behind
-        if(elapsed > 30)
-            elapsed = 30;
+            SDL_UpdateTexture(texture, nullptr, screenData, screenWidth * 3);
+            SDL_RenderClear(renderer);
+            SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+        }
 
-        //cpuCycles += cpuCore.run(elapsed);
+        cpuCore.runCall(blitHeader.tick, now);
 
         lastTick = now;
 
-        // TODO: sync
-        //SDL_UpdateTexture(texture, nullptr, screenData, screenWidth * 2);
-        SDL_RenderClear(renderer);
-        //SDL_RenderCopy(renderer, texture, nullptr, nullptr);
         SDL_RenderPresent(renderer);
     }
 
