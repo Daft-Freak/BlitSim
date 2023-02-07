@@ -2677,6 +2677,49 @@ int ARMv6MCore::doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc)
     auto op1 = (opcode >> 20) & 7;
     auto op2 = (opcode >> 4) & 3;
 
+    auto nReg = static_cast<Reg>((opcode >> 16) & 0xF);
+    auto aReg = static_cast<Reg>((opcode >> 12) & 0xF);
+    auto dstReg = static_cast<Reg>((opcode >> 8) & 0xF);
+    auto mReg = static_cast<Reg>(opcode & 0xF);
+
+    assert(((opcode >> 6) & 3) == 0);
+
+    if(op1 == 0)
+    {
+        if(op2 == 0)
+        {
+            if(aReg == Reg::PC) // MUL
+                loReg(dstReg) = loReg(nReg) * loReg(mReg);
+            else // MLA
+                loReg(dstReg) = loReg(nReg) * loReg(mReg) + loReg(aReg);
+
+            return pcSCycles * 2;
+        }
+        else if(op2 == 1) // MLS
+        {
+            loReg(dstReg) = loReg(aReg) - loReg(nReg) * loReg(mReg);
+
+            return pcSCycles * 2;
+        }
+    }
+    else if(op1 == 1)
+    {
+        if(aReg == Reg::PC) // signed multiply, halfwords
+        {
+            bool nHigh = opcode & (1 << 5);
+            bool mHigh = opcode & (1 << 4);
+
+            auto op1 = static_cast<int16_t>(loReg(nReg) >> (nHigh ? 16 : 0));
+            auto op2 = static_cast<int16_t>(loReg(mReg) >> (mHigh ? 16 : 0));
+
+            loReg(dstReg) = static_cast<int32_t>(op1) * static_cast<int32_t>(op2);
+
+            return pcSCycles * 2;
+        }
+        else // signed multiply accumulate, halfwords
+        {}
+    }
+
     printf("Unhandled mul/diff opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
     exit(1);
 }
@@ -2685,6 +2728,23 @@ int ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 20) & 7;
     auto op2 = (opcode >> 4) & 0xF;
+
+    auto nReg = static_cast<Reg>((opcode >> 16) & 0xF);
+    auto dstLoReg = static_cast<Reg>((opcode >> 12) & 0xF);
+    auto dstHiReg = static_cast<Reg>((opcode >> 8) & 0xF);
+    auto mReg = static_cast<Reg>(opcode & 0xF);
+
+    if(op1 == 2) // UMULL
+    {
+        assert(op2 == 0);
+
+        uint64_t res = static_cast<uint64_t>(loReg(nReg)) * static_cast<uint64_t>(loReg(mReg));
+
+        loReg(dstLoReg) = res & 0xFFFFFFFF;
+        loReg(dstHiReg) = res >> 32;
+
+        return pcSCycles * 2;
+    }
 
     printf("Unhandled long mul/div opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
     exit(1);
