@@ -1733,10 +1733,13 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
 
             auto addr = loReg(baseReg) + loReg(indexReg);
 
+            if(baseReg == Reg::PC)
+                addr -= 2;
+
             int cycles = pcSCycles * 3 + pcNCycles;
             auto offset = readMem8(addr, cycles);
 
-            updateTHUMBPC(pc + offset * 2);
+            updateTHUMBPC((pc - 2) + offset * 2);
 
             return cycles;
         }
