@@ -59,6 +59,48 @@ void MemoryBus::reset()
     api->now = 0x08BA0005;
     api->random = 0x08BA0007;
     api->exit = 0x08BA0009;
+
+    api->debug = 0x08BA000B;
+
+    api->open_file = 0x08BA000D;
+    api->read_file = 0x08BA000F;
+    api->write_file = 0x08BA0011;
+    api->close_file = 0x08BA0013;
+    api->get_file_length = 0x08BA0015;
+    api->list_files = 0x08BA0017;
+    api->file_exists = 0x08BA0019;
+    api->directory_exists = 0x08BA001B;
+    api->create_directory = 0x08BA001D;
+    api->rename_file = 0x08BA001F;
+    api->remove_file = 0x08BA0021;
+    api->get_save_path = 0x08BA0023;
+    api->is_storage_available = 0x08BA0025;
+
+    api->enable_us_timer = 0x08BA0027;
+    api->get_us_timer = 0x08BA0029;
+    api->get_max_us_timer = 0x08BA002B;
+
+    api->decode_jpeg_buffer = 0x08BA002D;
+    api->decode_jpeg_file = 0x08BA002F;
+
+    api->launch = 0x08BA0031;
+    api->erase_game = 0x08BA0033;
+    api->get_type_handler_metadata = 0x08BA0035;
+
+    api->get_launch_path = 0x08BA0037;
+
+    // multiplayer
+    api->is_multiplayer_connected = 0x08BA0039;
+    api->set_multiplayer_enabled = 0x08BA003B;
+    api->send_message = 0x08BA003D;
+    //api->message_received; // set by user
+
+    api->flash_to_tmp = 0x08BA003F;
+    api->tmp_file_closed = 0x08BA0041;
+
+    api->get_metadata = 0x08BA0043;
+
+    api->set_screen_mode_format = 0x08BA0045;
 }
 
 template<class T>
