@@ -129,6 +129,8 @@ static bool parseBlit(std::ifstream &file)
     return true;
 }
 
+static int screenMode = 0;
+
 void apiCallback(int index, uint32_t *regs)
 {
     switch(index)
@@ -137,9 +139,21 @@ void apiCallback(int index, uint32_t *regs)
         {
             auto screenPtr = 0x30000000; // in D2
             int cycles = 0;
+            screenMode = regs[0];
+            
             mem.write<uint32_t>(screenPtr, 0x3000FC00, cycles, false); // .data = framebuffer
-            mem.write<uint32_t>(screenPtr + 4, 160, cycles, false); // .bounds.w
-            mem.write<uint32_t>(screenPtr + 8, 120, cycles, false); // .bounds.h
+
+            if(screenMode == 0) // lores
+            {
+                mem.write<uint32_t>(screenPtr + 4, 160, cycles, false); // .bounds.w
+                mem.write<uint32_t>(screenPtr + 8, 120, cycles, false); // .bounds.h
+            }
+            else
+            {
+                mem.write<uint32_t>(screenPtr + 4, 320, cycles, false); // .bounds.w
+                mem.write<uint32_t>(screenPtr + 8, 240, cycles, false); // .bounds.h
+            }
+
             mem.write<uint32_t>(screenPtr + 36, 0, cycles, false); // .format = RGB
             mem.write<uint32_t>(screenPtr + 48, 0, cycles, false); // .palette = null
 
@@ -155,8 +169,8 @@ void apiCallback(int index, uint32_t *regs)
 
 int main(int argc, char *argv[])
 {
-    int screenWidth = 160;
-    int screenHeight = 120;
+    int screenWidth = 320;
+    int screenHeight = 240;
     int screenScale = 5;
 
     std::string romFilename;
@@ -240,9 +254,18 @@ int main(int argc, char *argv[])
             cpuCore.runCall(blitHeader.render, now);
             lastRender = now;
 
-            SDL_UpdateTexture(texture, nullptr, screenData, screenWidth * 3);
+            SDL_Rect r{0, 0, screenWidth, screenHeight};
+            auto dr = r;
+
+            if(screenMode == 0)
+            {
+                r.w /= 2;
+                r.h /= 2;
+            }
+
+            SDL_UpdateTexture(texture, &r, screenData, r.w * 3);
             SDL_RenderClear(renderer);
-            SDL_RenderCopy(renderer, texture, nullptr, nullptr);
+            SDL_RenderCopy(renderer, texture, &r, &dr);
         }
 
         cpuCore.runCall(blitHeader.tick, now);
