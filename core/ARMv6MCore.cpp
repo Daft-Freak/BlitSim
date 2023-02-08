@@ -1615,7 +1615,25 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
             return pcSCycles * 2;
         }
 
-        // 3: ORN/MVN
+        case 0x3:
+        {
+            uint32_t res;
+            if(nReg == Reg::PC) // MVN
+                res = ~op2;
+            else // ORN
+                res = loReg(nReg) | ~op2;
+
+            loReg(dReg) = res;
+
+            if(setFlags)
+            {
+                cpsr = (cpsr & 0x1FFFFFFF)
+                    | (res & Flag_N)
+                    | (res == 0 ? Flag_Z : 0)
+                    | (carry ? Flag_C : 0);
+            }
+            return pcSCycles * 2;
+        }
 
         case 0x4:
         {
