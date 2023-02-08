@@ -7,6 +7,8 @@
 class ARMv6MCore final
 {
 public:
+    using APICallback = void(*)(int index, uint32_t *regs);
+
     ARMv6MCore(MemoryBus &mem);
 
     void reset();
@@ -26,6 +28,8 @@ public:
     MemoryBus &getMem() {return mem;}
 
     ClockTarget &getClock() {return clock;}
+
+    void setAPICallback(APICallback cb){apiCallback = cb;}
 
 private:
     enum class Reg
@@ -188,4 +192,7 @@ private:
     uint32_t mpuRegs[5]; // ED90-EDA0
 
     MemoryBus &mem;
+
+    // high level 32blit firmware API emulation
+    APICallback apiCallback;
 };

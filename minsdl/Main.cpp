@@ -129,6 +129,30 @@ static bool parseBlit(std::ifstream &file)
     return true;
 }
 
+void apiCallback(int index, uint32_t *regs)
+{
+    switch(index)
+    {
+        case 0: // set_screen_mode
+        {
+            auto screenPtr = 0x30000000; // in D2
+            int cycles = 0;
+            mem.write<uint32_t>(screenPtr, 0x3000FC00, cycles, false); // .data = framebuffer
+            mem.write<uint32_t>(screenPtr + 4, 160, cycles, false); // .bounds.w
+            mem.write<uint32_t>(screenPtr + 8, 120, cycles, false); // .bounds.h
+            mem.write<uint32_t>(screenPtr + 36, 0, cycles, false); // .format = RGB
+            mem.write<uint32_t>(screenPtr + 48, 0, cycles, false); // .palette = null
+
+            regs[0] = screenPtr; // return screen ptr
+            break;
+        }
+
+        default:
+            printf("blit API %i\n", index);
+            break;
+    }
+}
+
 int main(int argc, char *argv[])
 {
     int screenWidth = 160;
@@ -177,6 +201,8 @@ int main(int argc, char *argv[])
     // emu init
     
     cpuCore.reset();
+
+    cpuCore.setAPICallback(apiCallback);
 
     auto screenData = mem.mapAddress(0x3000FC00); // framebuffer
 
