@@ -2622,11 +2622,39 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
             }
             break;
         }
+        case 0x5:
+        {
+            if(nReg == Reg::PC) // ADR
+            {}
+            else // SUBW
+            {
+                auto imm = ((opcode >> 15) & 0x800) | ((opcode >> 4) & 0x700) | (opcode & 0xFF);
+
+                loReg(dstReg) = loReg(nReg) - imm;
+                return pcSCycles * 2;
+            }
+            break;
+        }
         case 0x2: // MOVW
         {
             auto imm = ((opcode >> 4) & 0xF000) |((opcode >> 15) & 0x800) | ((opcode >> 4) & 0x700) | (opcode & 0xFF);
 
             loReg(dstReg) = imm;
+            return pcSCycles * 2;
+        }
+        case 0xB: // BFI/BFC
+        {
+            int msb = (opcode & 0x1F);
+            int lsb = ((opcode >> 10) & 0x1C) | ((opcode >> 6) & 3);
+
+            assert(msb >= lsb);
+
+            auto mask = (1 << (msb - lsb + 1)) - 1;
+            if(nReg == Reg::PC) // BFC
+                loReg(dstReg) = (loReg(dstReg) & ~(mask << lsb));
+            else // BFI
+                loReg(dstReg) = (loReg(dstReg) & ~(mask << lsb)) | loReg(nReg) << lsb;
+
             return pcSCycles * 2;
         }
         case 0xE: // UBFX
@@ -3198,7 +3226,107 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
 
     auto nReg = static_cast<Reg>((opcode >> 16) & 0xF);
 
-    if(op2 & 0b1000)
+    if(op2 == 0)
+    {
+        bool setFlags = opcode & (1 << 20);
+        auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
+        auto mReg = static_cast<Reg>(opcode & 0xF);
+    
+        switch(op1 >> 1)
+        {
+            case 0: // LSL
+            {
+                auto shift = loReg(mReg) & 0xFF;
+                auto val = loReg(nReg);
+
+                auto carry = cpsr & Flag_C;
+                uint32_t res;
+
+                if(shift >= 32)
+                {
+                    carry = shift == 32 ? (val & 1) : 0;
+                    carry = carry ? Flag_C : 0;
+                    loReg(dReg) = res = 0;
+                }
+                else if(shift)
+                {
+                    carry = val & (1 << (32 - shift)) ? Flag_C : 0;
+                    res = val << shift;
+
+                    loReg(dReg) = res;
+                }
+                else
+                    loReg(dReg) = res = val;
+
+                if(setFlags)
+                    cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
+                
+                return pcSCycles * 2;
+            }
+
+            case 1: // LSR
+            {
+                auto shift = loReg(mReg) & 0xFF;
+                auto val = loReg(nReg);
+
+                auto carry = cpsr & Flag_C;
+                uint32_t res;
+
+                if(shift >= 32)
+                {
+                    carry = shift == 32 ? (val & (1 << 31)) : 0;
+                    carry = carry ? Flag_C : 0;
+                    loReg(dReg) = res = 0;
+                }
+                else if(shift)
+                {
+                    carry = val & (1 << (shift - 1)) ? Flag_C : 0;
+                    res = val >> shift;
+
+                    loReg(dReg) = res;
+                }
+                else
+                    loReg(dReg) = res = val;
+
+                if(setFlags)
+                    cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
+                
+                return pcSCycles * 2;
+            }
+
+            case 2: // ASR
+            {
+                auto shift = loReg(mReg) & 0xFF;
+                auto val = loReg(nReg);
+
+                auto carry = cpsr & Flag_C;
+                auto sign = val & signBit;
+                uint32_t res;
+
+                if(shift >= 32)
+                {
+                    carry = sign ? Flag_C : 0;
+                    loReg(dReg) = res = sign ? 0xFFFFFFFF : 0;
+                }
+                else if(shift)
+                {
+                    carry = val & (1 << (shift - 1)) ? Flag_C : 0;
+                    res = static_cast<int32_t>(val) >> shift;
+
+                    loReg(dReg) = res;
+                }
+                else
+                    loReg(dReg) = res = val;
+
+                if(setFlags)
+                    cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
+                
+                return pcSCycles * 2;
+            }
+            // 3: ROR
+        }
+    }
+    else if(op2 & 0b1000)
     {
         if(op1 == 0) // SXTAH/SXTH
         {
@@ -3263,6 +3391,27 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
                 loReg(dReg) = loReg(nReg) + val;
 
             return pcSCycles * 2;
+        }
+        else if(op1 & 0b1000) // misc ops
+        {
+            assert(!(op1 & 0b100));
+            assert(!(op2 & 0b100));
+
+            switch(op1 & 3)
+            {
+                case 3: // CLZ
+                {
+                    assert(op2 == 0b1000);
+                    assert(((opcode >> 16) & 0xF) == (opcode & 0xF)); // m encoded twice
+
+                    auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
+                    auto mReg = static_cast<Reg>(opcode & 0xF);
+
+                    loReg(dReg) = __builtin_clz(loReg(mReg));
+
+                    return pcSCycles * 2;
+                }
+            }
         }
     }
 
