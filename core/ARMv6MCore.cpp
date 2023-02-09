@@ -3451,20 +3451,18 @@ int ARMv6MCore::doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc)
     }
     else if(op1 == 1)
     {
-        if(aReg == Reg::PC) // signed multiply, halfwords
-        {
-            bool nHigh = opcode & (1 << 5);
-            bool mHigh = opcode & (1 << 4);
+        bool nHigh = opcode & (1 << 5);
+        bool mHigh = opcode & (1 << 4);
 
-            auto op1 = static_cast<int16_t>(loReg(nReg) >> (nHigh ? 16 : 0));
-            auto op2 = static_cast<int16_t>(loReg(mReg) >> (mHigh ? 16 : 0));
+        auto op1 = static_cast<int16_t>(loReg(nReg) >> (nHigh ? 16 : 0));
+        auto op2 = static_cast<int16_t>(loReg(mReg) >> (mHigh ? 16 : 0));
 
+        if(aReg == Reg::PC) // SMUL[BT][BT]
             loReg(dstReg) = static_cast<int32_t>(op1) * static_cast<int32_t>(op2);
+        else // SMLA[BT][BT]
+            loReg(dstReg) = static_cast<int32_t>(op1) * static_cast<int32_t>(op2) + loReg(aReg);
 
-            return pcSCycles * 2;
-        }
-        else // signed multiply accumulate, halfwords
-        {}
+        return pcSCycles * 2;
     }
 
     printf("Unhandled mul/diff opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
@@ -3481,7 +3479,29 @@ int ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
     auto dstHiReg = static_cast<Reg>((opcode >> 8) & 0xF);
     auto mReg = static_cast<Reg>(opcode & 0xF);
 
-    if(op1 == 2) // UMULL
+    if(op1 == 0) // SMULL
+    {
+        assert(op2 == 0);
+
+        int64_t res = static_cast<int64_t>(loReg(nReg)) * static_cast<int64_t>(loReg(mReg));
+
+        loReg(dstLoReg) = res & 0xFFFFFFFF;
+        loReg(dstHiReg) = res >> 32;
+
+        return pcSCycles * 2;
+    }
+    else if(op1 == 1) // SDIV
+    {
+        assert(op2 == 0xF);
+        assert(dstLoReg == Reg::PC);
+
+        int32_t res = static_cast<int32_t>(loReg(nReg)) / static_cast<int32_t>(loReg(mReg));
+
+        loReg(dstHiReg) = res;
+
+        return pcSCycles * 2;
+    }
+    else if(op1 == 2) // UMULL
     {
         assert(op2 == 0);
 
@@ -3491,6 +3511,30 @@ int ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
         loReg(dstHiReg) = res >> 32;
 
         return pcSCycles * 2;
+    }
+    else if(op1 == 3) // UDIV
+    {
+        assert(op2 == 0xF);
+        assert(dstLoReg == Reg::PC);
+
+        auto res = loReg(nReg) / loReg(mReg);
+
+        loReg(dstHiReg) = res;
+
+        return pcSCycles * 2;
+    }
+    else if(op1 == 6)
+    {
+        if(op2 == 0) // UMLAL
+        {
+            uint64_t a = loReg(dstLoReg) | static_cast<uint64_t>(loReg(dstHiReg)) << 32;
+            uint64_t res = static_cast<uint64_t>(loReg(nReg)) * static_cast<uint64_t>(loReg(mReg)) + a;
+
+            loReg(dstLoReg) = res & 0xFFFFFFFF;
+            loReg(dstHiReg) = res >> 32;
+
+            return pcSCycles * 2;
+        }
     }
 
     printf("Unhandled long mul/div opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
