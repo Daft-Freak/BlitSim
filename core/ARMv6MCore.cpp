@@ -3169,37 +3169,69 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
 
     if(op2 & 0b1000)
     {
-        if(op1 == 4)
+        if(op1 == 0) // SXTAH/SXTH
         {
-            if(nReg == Reg::PC) // SXTB
-            {
-            }
-            else // SXTAB
-            {
-                auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
-                auto mReg = static_cast<Reg>(opcode & 0xF);
-                int rotation = (opcode >> 1) & 0x18;
+            auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
+            auto mReg = static_cast<Reg>(opcode & 0xF);
+            int rotation = (opcode >> 1) & 0x18;
 
-                auto val = (loReg(mReg) >> rotation) | (loReg(mReg) << (32 - rotation));
-                val = (val & 0x80) ? val | 0xFFFFFF00 : val & 0xFF;
+            auto val = (loReg(mReg) >> rotation) | (loReg(mReg) << (32 - rotation));
+            val = (val & 0x8000) ? val | 0xFFFF0000 : val & 0xFFFF;
+
+            if(nReg == Reg::PC) // SXTH
+                loReg(dReg) = val;
+            else // SXTAH
                 loReg(dReg) = loReg(nReg) + val;
 
-                return pcSCycles * 2;
-            }
+            return pcSCycles * 2;
         }
-        else if(op1 == 5)
+        else if(op1 == 1) // UXTAH/UXTH
         {
+            auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
+            auto mReg = static_cast<Reg>(opcode & 0xF);
+            int rotation = (opcode >> 1) & 0x18;
+
+            auto val = (loReg(mReg) >> rotation) | (loReg(mReg) << (32 - rotation));
+            val &= 0xFFFF;
+
+            if(nReg == Reg::PC) // UXTH
+                loReg(dReg) = val;
+            else // UXTAH
+                loReg(dReg) = loReg(nReg) + val;
+
+            return pcSCycles * 2;
+        }
+        else if(op1 == 4) // SXTAB/SXTB
+        {
+            auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
+            auto mReg = static_cast<Reg>(opcode & 0xF);
+            int rotation = (opcode >> 1) & 0x18;
+
+            auto val = (loReg(mReg) >> rotation) | (loReg(mReg) << (32 - rotation));
+            val = (val & 0x80) ? val | 0xFFFFFF00 : val & 0xFF;
+
+            if(nReg == Reg::PC) // SXTB
+                loReg(dReg) = val;
+            else // SXTAB
+                loReg(dReg) = loReg(nReg) + val;
+
+            return pcSCycles * 2;
+        }
+        else if(op1 == 5) // UXTAB/UXTB
+        {
+            auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
+            auto mReg = static_cast<Reg>(opcode & 0xF);
+            int rotation = (opcode >> 1) & 0x18;
+
+            auto val = (loReg(mReg) >> rotation) | (loReg(mReg) << (32 - rotation));
+            val &= 0xFF;
+
             if(nReg == Reg::PC) // UXTB
-            {
-                auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
-                auto mReg = static_cast<Reg>(opcode & 0xF);
-                int rotation = (opcode >> 1) & 0x18;
+                loReg(dReg) = val;
+            else // UXTAB
+                loReg(dReg) = loReg(nReg) + val;
 
-                auto val = (loReg(mReg) >> rotation) | (loReg(mReg) << (32 - rotation));
-                loReg(dReg) = val & 0xFF;
-
-                return pcSCycles * 2;
-            }
+            return pcSCycles * 2;
         }
     }
 
