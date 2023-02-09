@@ -1855,6 +1855,36 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
 
             return cycles;
         }
+        else if(op == 2) // DB
+        {
+            for(uint16_t t = regList; t; t >>= 1)
+            {
+                if(t & 1)
+                    addr -= 4;
+            }
+
+            auto endAddr = addr;
+
+            int i = 0;
+            for(; regList; regList >>= 1, i++)
+            {
+                if(!(regList & 1))
+                    continue;
+
+                if(i == 15)
+                    updateTHUMBPC(readMem32(addr, cycles, seq) & ~1);
+                else
+                    regs[i] = readMem32(addr, cycles, seq);
+
+                seq = false;
+                addr += 4;
+            }
+
+            if(writeback && !baseInList)
+                loReg(baseReg) = endAddr;
+
+            return cycles;
+        }
     }
     else // STM
     {
