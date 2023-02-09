@@ -1952,24 +1952,29 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
 
     if(op1 == 1 && op2 == 1)
     {
-        if(op3 == 0) // TBB
+        if(!(op3 & 0b1110)) // TBB/TBH
         {
             assert((opcode & 0xFF00) == 0xF000);
 
             auto indexReg = static_cast<Reg>(opcode & 0xF);
 
-            auto addr = loReg(baseReg) + loReg(indexReg);
+            auto addr = loReg(baseReg);
 
             if(baseReg == Reg::PC)
                 addr -= 2;
 
             int cycles = pcSCycles * 3 + pcNCycles;
-            auto offset = readMem8(addr, cycles);
+            int offset;
+            if(op3 & 1) // TBH
+                offset = readMem16(addr + loReg(indexReg) * 2, cycles);
+            else
+                offset = readMem8(addr + loReg(indexReg), cycles);
 
             updateTHUMBPC((pc - 2) + offset * 2);
 
             return cycles;
         }
+
     }
     else if((op1 & 2) == 2 && (op2 & 1) == 0) // STRD (immediate)
     {
