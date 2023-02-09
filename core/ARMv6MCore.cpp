@@ -2336,7 +2336,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                         else if(opc2 == 8) // VCVT (int -> fp)
                         {
                             //bool toInt = false; // opc2 & 4;
-                            bool isUnsigned = opcode & (1 << 7);
+                            bool isUnsigned = !(opcode & (1 << 7));
                             // TODO: rounding mode
 
                             auto d = getVReg(12, 22, dWidth);
