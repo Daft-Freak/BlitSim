@@ -161,6 +161,10 @@ void apiCallback(int index, uint32_t *regs)
             break;
         }
 
+        case 2: // now
+            regs[0] = SDL_GetTicks();
+            break;
+
         default:
             printf("blit API %i\n", index);
             break;
