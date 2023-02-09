@@ -1976,7 +1976,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
         }
 
     }
-    else if((op1 & 2) == 2 && (op2 & 1) == 0) // STRD (immediate)
+    else if(((op1 & 2) || (op2 & 2)) && (op2 & 1) == 0) // STRD (immediate)
     {
         auto offset = (opcode & 0xFF) << 2;
         auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
@@ -1999,7 +1999,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
 
         return cycles;
     }
-    else if((op1 & 2) == 2 && (op2 & 1)) // LDRD (immediate)
+    else if(((op1 & 2) || (op2 & 2)) && (op2 & 1)) // LDRD (immediate)
     {
         auto offset = (opcode & 0xFF) << 2;
         auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
