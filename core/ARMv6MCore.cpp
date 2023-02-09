@@ -3426,7 +3426,50 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
 
     auto nReg = static_cast<Reg>((opcode >> 16) & 0xF);
 
-    if(op2 == 0)
+    if((op1 & 0b1000) && !(op2 & 0b1000)) // parallel add/sub
+    {
+        assert((opcode & 0xF000) == 0xF000);
+
+        auto nReg = static_cast<Reg>((opcode >> 16) & 0xF);
+        auto dstReg = static_cast<Reg>((opcode >> 8) & 0xF);
+        auto mReg = static_cast<Reg>(opcode & 0xF);
+
+        if(op2 & 0b100) // unsigned
+        {
+            switch(op1 & 7)
+            {
+                case 0: // U*ADD8
+                {
+                    int sum[4];
+
+                    for(int i = 0; i < 4; i++)
+                    {
+                        uint8_t n = loReg(nReg) >> (i * 8);
+                        uint8_t m = loReg(mReg) >> (i * 8);
+                        sum[i] = n + m;
+                    }
+
+                    loReg(dstReg) = (sum[0] & 0xFF) | (sum[1] & 0xFF) << 8 | (sum[2] & 0xFF) << 16 | (sum[3] & 0xFF) << 24;
+
+                    cpsr = (cpsr & ~(Flag_GE0 | Flag_GE1 | Flag_GE2 | Flag_GE3))
+                         | ((sum[0] >= 0x100) ? Flag_GE0 : 0)
+                         | ((sum[1] >= 0x100) ? Flag_GE1 : 0)
+                         | ((sum[2] >= 0x100) ? Flag_GE2 : 0)
+                         | ((sum[3] >= 0x100) ? Flag_GE3 : 0);
+
+                    return pcSCycles * 2;
+                }
+                //1: U*ADD16
+                //2: U*ASX
+                //4: U*SUB8
+                //5: U*SUB16
+                //6: U*SAX
+            }
+        }
+        else // signed
+        {}
+    }
+    else if(op2 == 0)
     {
         bool setFlags = opcode & (1 << 20);
         auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
@@ -3599,6 +3642,21 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
 
             switch(op1 & 3)
             {
+                case 2: // SEL
+                {
+                    auto nReg = static_cast<Reg>((opcode >> 16) & 0xF);
+                    auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
+                    auto mReg = static_cast<Reg>(opcode & 0xF);
+
+                    uint32_t nMask = ((cpsr & Flag_GE0) ? 0xFF : 0)
+                                   | ((cpsr & Flag_GE1) ? 0xFF00 : 0)
+                                   | ((cpsr & Flag_GE2) ? 0xFF0000 : 0)
+                                   | ((cpsr & Flag_GE3) ? 0xFF000000 : 0);
+
+                    loReg(dReg) = (loReg(nReg) & nMask) | (loReg(mReg) & ~nMask);
+
+                    return pcSCycles * 2;
+                }
                 case 3: // CLZ
                 {
                     assert(op2 == 0b1000);

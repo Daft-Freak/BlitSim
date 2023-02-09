@@ -67,6 +67,11 @@ private:
         // control
         Flag_T = (1 << 24), // thumb
 
+        Flag_GE0 = (1 << 16),
+        Flag_GE1 = (1 << 17),
+        Flag_GE2 = (1 << 18),
+        Flag_GE3 = (1 << 19),
+
         // condition codes
         Flag_V = (1 << 28),
         Flag_C = (1 << 29),
