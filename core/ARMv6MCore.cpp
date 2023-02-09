@@ -3072,8 +3072,6 @@ int ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
     auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
     auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
 
-    assert(dstReg != Reg::PC); // TODO
-
     assert(!(op1 & 2));
 
     int cycles = pcSCycles * 2;
@@ -3137,7 +3135,14 @@ int ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
         }
     }
 
-    loReg(dstReg) = data;
+    if(dstReg == Reg::PC)
+    {
+        assert(data & 1);
+        // address should be aligned
+        updateTHUMBPC(data & ~1);
+    }
+    else
+        loReg(dstReg) = data;
 
     return cycles;
 }
