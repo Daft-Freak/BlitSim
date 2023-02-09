@@ -392,7 +392,7 @@ int ARMv6MCore::executeTHUMBInstruction()
 
         if(!result)
         {
-            if((opcode >> 12) == 0xF || (opcode >> 11) == 0xF) //32bit
+            if((opcode >> 12) == 0xF || (opcode >> 11) == 0x1D) //32bit
             {
                 // skip second half
                 decodeOp = fetchOp;
