@@ -1692,7 +1692,20 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
             return pcSCycles * 2;
         }
 
-        // B: SBC
+        case 0xB: // SBC
+        {
+            auto op1 = loReg(nReg);
+
+            int c = (cpsr & Flag_C) ? 1 : 0;
+            auto res = loReg(dReg) = op1 - op2 + c - 1;
+
+            auto carry = !(op2 > op1 || (op2 == op1 && !c)) ? Flag_C : 0;
+            auto overflow = ((op1 ^ op2) & signBit) & ((op1 ^ res) & signBit);
+            if(setFlags)
+                cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
+            
+            return pcSCycles * 2;
+        }
 
         case 0xD: // SUB/CMP
         {
