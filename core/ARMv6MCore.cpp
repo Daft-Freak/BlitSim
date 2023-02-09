@@ -2136,6 +2136,35 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                 return cycles;
             }
         }
+        else if((op1 & 0x3E) == 4)
+        {
+            assert(((opcode >> 4) & 0b1101) == 1);
+
+            bool toArm = op1 & 1;
+
+            auto tReg = static_cast<Reg>((opcode >> 12) & 0xF);
+            auto t2Reg = static_cast<Reg>((opcode >> 16) & 0xF);
+
+            auto m = getVReg(0, 5, dWidth);
+
+            if(dWidth) // two regs <-> d reg
+            {
+                if(toArm)
+                {
+                    loReg(tReg) = fpRegs[m * 2];
+                    loReg(t2Reg) = fpRegs[m * 2 + 1];
+                }
+                else
+                {
+                    fpRegs[m * 2] = loReg(tReg);
+                    fpRegs[m * 2 + 1] = loReg(t2Reg);
+                }
+
+                return cycles;
+            }
+            else // two regs <-> two s regs
+            {}
+        }
     }
     else if(!op)
     {
@@ -2148,29 +2177,105 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
             auto opc4 = opcode & 0xF;
 
             if(t)
-            {}
+            {
+                if((opc1 & 0b1000) == 0) // VSEL
+                {
+                    auto n = getVReg(16, 7, dWidth);
+                    auto d = getVReg(12, 22, dWidth);
+                    auto m = getVReg(0, 5, dWidth);
+
+                    int cc = (opcode >> 20) & 3;
+                    int cond = cc << 2 | ((cc ^ (cc << 1)) & 2);
+
+                    // only four valid conditions
+                    bool condVal = false;
+                    switch(cond)
+                    {
+                        case 0x0: // EQ
+                            condVal = cpsr & Flag_Z;
+                            break;
+                        case 0x6: // VS
+                            condVal = cpsr & Flag_V;
+                            break;
+                        case 0xA: // GE
+                            condVal = !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
+                            break;
+                        case 0xC: // GT
+                            condVal = !(cpsr & Flag_Z) && !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
+                            break;
+                    }
+
+                    if(dWidth)
+                        dReg(d) = dReg(condVal ? n : m);
+                    else
+                        sReg(d) = sReg(condVal ? n : m);
+                    
+                    return cycles;
+                }
+                else if((opc1 & 0b1011) == 0b1011)
+                {
+                    if((opc2 & 0b1100) == 0b1000) // VRINT[ANPM]
+                    {
+                        assert(opc3  == 1);
+
+                        auto rm = (opcode >> 16) & 3; // away, even, +inf, -inf
+
+                        auto d = getVReg(12, 22, dWidth);
+                        auto m = getVReg(0, 5, dWidth);
+
+                        if(dWidth)
+                        {
+                            if(rm == 0) // away from 0
+                                dReg(d) = round(dReg(m));
+                            else if(rm == 1) // to even
+                                dReg(d) = dReg(m) - remainder(dReg(m), 1.0);
+                            else if(rm == 2) // to +infinity
+                                dReg(d) = floor(dReg(m) + 0.5);
+                            else if(rm == 3) // to -infinity
+                                dReg(d) = ceil(dReg(m) - 0.5);
+                        }
+                        else
+                        {
+                            if(rm == 0) // away from 0
+                                sReg(d) = roundf(sReg(m));
+                            else if(rm == 1) // to even
+                                sReg(d) = sReg(m) - remainderf(sReg(m), 1.0f);
+                            else if(rm == 2) // to +infinity
+                                sReg(d) = floorf(sReg(m) + 0.5f);
+                            else if(rm == 3) // to -infinity
+                                sReg(d) = ceilf(sReg(m) - 0.5f);
+                        }
+
+                        return cycles;
+                    }
+                }
+            }
             else
             {
                 switch(opc1 & 0b1011)
                 {
                     case 0b0010:
                     {
-                        if(opc3 & 1) //VNM*
-                        {}
+                        auto n = getVReg(16, 7, dWidth);
+                        auto d = getVReg(12, 22, dWidth);
+                        auto m = getVReg(0, 5, dWidth);
+
+                        if(opc3 & 1) // VNMUL
+                        {
+                            if(dWidth)
+                                dReg(d) = -(dReg(n) * dReg(m));
+                            else
+                                sReg(d) = -(sReg(n) * sReg(m));
+                        }
                         else // VMUL
                         {
-                            auto n = getVReg(16, 7, dWidth);
-                            auto d = getVReg(12, 22, dWidth);
-                            auto m = getVReg(0, 5, dWidth);
-
                             if(dWidth)
                                 dReg(d) = dReg(n) * dReg(m);
                             else
                                 sReg(d) = sReg(n) * sReg(m);
-
-                            return cycles;
                         }
-                        break;
+
+                        return cycles;
                     }
                     case 0b0011:
                     {
@@ -2286,19 +2391,25 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                         }
                         else if(opc2 == 0)
                         {
+                            auto d = getVReg(12, 22, dWidth);
+                            auto m = getVReg(0, 5, dWidth);
+
                             if(opc3 == 1) // VMOV (register)
                             {
-                                auto d = getVReg(12, 22, dWidth);
-                                auto m = getVReg(0, 5, dWidth);
-
                                 if(dWidth)
                                     dReg(d) = sReg(m);
                                 else
                                     fpRegs[d] = fpRegs[m];
-
-                                return cycles;
                             }
-                            // 3 = VABS
+                            else // VABS
+                            {
+                                if(dWidth)
+                                    dReg(d) = abs(sReg(m));
+                                else
+                                    sReg(d) = fabs(sReg(m));
+                            }
+
+                            return cycles;
                         }
                         else if(opc2 == 1)
                         {
@@ -2329,7 +2440,26 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                             auto d = getVReg(12, 22, dWidth);
 
                             if(dWidth)
-                            {}
+                            {
+                                double val = 0.0;
+
+                                if(withZero)
+                                    assert((opcode & 0x2F) == 0);
+                                else
+                                {
+                                    auto m = getVReg(0, 5, dWidth);
+                                    val = dReg(m);
+                                }
+
+                                if(dReg(d) == val)
+                                    fpscr = (fpscr & 0x0FFFFFFF) | Flag_C | Flag_Z;
+                                else if(dReg(d) < val)
+                                    fpscr = (fpscr & 0x0FFFFFFF) | Flag_N;
+                                else
+                                    fpscr = (fpscr & 0x0FFFFFFF) | Flag_C;
+
+                                return cycles;
+                            }
                             else
                             {
                                 float val = 0.0f;
@@ -2389,6 +2519,76 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                             }
 
                             return cycles;
+                        }
+                        else if((opc2 & 0xA) == 0xA) // VCVT (fixed <-> float)
+                        {
+                            auto d = getVReg(12, 22, dWidth);
+                            bool toFixed = (opc2 & 4);
+                            bool isUnsigned = (opc2 & 1);
+
+                            int size = (opcode & (1 << 7)) ? 32 : 16;
+                            int imm = ((opcode << 1) & 0x1E) | ((opcode >> 5) & 1);
+                            int fracBits = size - imm;
+
+                            uint32_t mask = (1ull << size) - 1;
+
+                            if(toFixed)
+                            {
+                                if(dWidth)
+                                {
+                                    uint32_t fixed = dReg(d) * (1 << fracBits);
+
+                                    if(!isUnsigned && (fixed & (1 << (size - 1))))
+                                        fixed |= ~mask;
+                                    else
+                                        fixed &= mask;
+
+                                    fpRegs[d * 2] = fixed;
+                                    fpRegs[d * 2 + 1] = 0; // result is 32-bit
+                                }
+                                else
+                                {
+                                    uint32_t fixed = sReg(d) * (1 << fracBits);
+
+                                    if(!isUnsigned && (fixed & (1 << (size - 1))))
+                                        fixed |= ~mask;
+                                    else
+                                        fixed &= mask;
+
+                                    fpRegs[d] = fixed;
+                                }
+
+                                return cycles;
+                            }
+                            else
+                            {
+                                uint32_t fixed = (dWidth ? fpRegs[d * 2] : fpRegs[d]) & mask;
+                                if(!isUnsigned && size == 16 && (fixed & 0x8000))
+                                    fixed |= ~mask;
+
+                                if(dWidth)
+                                {
+                                    double f;
+                                    if(isUnsigned)
+                                        f = static_cast<double>(fixed) / (1 << fracBits);
+                                    else
+                                        f = static_cast<double>(static_cast<int32_t>(fixed)) / (1 << fracBits);
+
+                                    dReg(d) = f;
+                                }
+                                else
+                                {
+                                    float f;
+                                    if(isUnsigned)
+                                        f = static_cast<float>(fixed) / (1 << fracBits);
+                                    else
+                                        f = static_cast<float>(static_cast<int32_t>(fixed)) / (1 << fracBits);
+
+                                    sReg(d) = f;
+                                }
+
+                                return cycles;
+                            }
                         }
                         else if(opc2 == 0xC || opc2 == 0xD) // VCVT (fp -> int)
                         {
@@ -2501,7 +2701,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
         //bool n = opcode & (1 << 22);
         bool writeback = opcode & (1 << 21);
 
-        assert(!t2 && index);
+        assert(!t2);
 
         auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
         auto d = getVReg(12, 22, dWidth);
