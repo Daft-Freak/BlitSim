@@ -3742,7 +3742,8 @@ int ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
     {
         assert(op2 == 0);
 
-        int64_t res = static_cast<int64_t>(loReg(nReg)) * static_cast<int64_t>(loReg(mReg));
+        auto ns = static_cast<int32_t>(loReg(nReg));
+        auto res = static_cast<int64_t>(ns) * static_cast<int32_t>(loReg(mReg));
 
         loReg(dstLoReg) = res & 0xFFFFFFFF;
         loReg(dstHiReg) = res >> 32;
