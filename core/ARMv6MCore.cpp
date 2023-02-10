@@ -2230,9 +2230,9 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                             else if(rm == 1) // to even
                                 dReg(d) = dReg(m) - remainder(dReg(m), 1.0);
                             else if(rm == 2) // to +infinity
-                                dReg(d) = floor(dReg(m) + 0.5);
+                                dReg(d) = ceil(dReg(m));
                             else if(rm == 3) // to -infinity
-                                dReg(d) = ceil(dReg(m) - 0.5);
+                                dReg(d) = floor(dReg(m));
                         }
                         else
                         {
@@ -2241,9 +2241,9 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                             else if(rm == 1) // to even
                                 sReg(d) = sReg(m) - remainderf(sReg(m), 1.0f);
                             else if(rm == 2) // to +infinity
-                                sReg(d) = floorf(sReg(m) + 0.5f);
+                                sReg(d) = ceilf(sReg(m));
                             else if(rm == 3) // to -infinity
-                                sReg(d) = ceilf(sReg(m) - 0.5f);
+                                sReg(d) = floorf(sReg(m));
                         }
 
                         return cycles;
