@@ -2397,14 +2397,14 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                             if(opc3 == 1) // VMOV (register)
                             {
                                 if(dWidth)
-                                    dReg(d) = sReg(m);
+                                    dReg(d) = dReg(m);
                                 else
                                     fpRegs[d] = fpRegs[m];
                             }
                             else // VABS
                             {
                                 if(dWidth)
-                                    dReg(d) = abs(sReg(m));
+                                    dReg(d) = abs(dReg(m));
                                 else
                                     sReg(d) = fabs(sReg(m));
                             }
