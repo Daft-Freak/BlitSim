@@ -255,15 +255,13 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
 template<class T, size_t size>
 T MemoryBus::doRead(const uint8_t (&mem)[size], uint32_t addr) const
 {
-    // use size of type for alignment
-    return *reinterpret_cast<const T *>(mem + (addr & (size - sizeof(T))));
+    return *reinterpret_cast<const T *>(mem + (addr & (size - 1)));
 }
 
 template<class T, size_t size>
 void MemoryBus::doWrite(uint8_t (&mem)[size], uint32_t addr, T data)
 {
-    // use size of type for alignment
-    *reinterpret_cast< T *>(mem + (addr & (size - sizeof(T)))) = data;
+    *reinterpret_cast< T *>(mem + (addr & (size - 1))) = data;
 }
 
 template<class T>
