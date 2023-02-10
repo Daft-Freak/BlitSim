@@ -2068,7 +2068,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
 
         bool sign = imm8 & 0x80;
         auto exp = ((~imm8 << 1) & 0x80) | ((imm8 & 0x40) ? eMask  : 0)| ((imm8 >> 4) & 3);
-        auto frac = (imm8 & 0xF) << (f - 4);
+        auto frac = static_cast<uint64_t>(imm8 & 0xF) << (f - 4);
 
         return (sign ? 1ULL : 0ULL) << (e + f) | static_cast<uint64_t>(exp) << f | frac;
     };
@@ -2379,15 +2379,16 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
 
                             if(dWidth)
                             {
-                                //expandImm(imm, 64);
-                                //...
+                                uint64_t imm64 = expandImm(imm, 64);
+                                fpRegs[d * 2] = imm64 & 0xFFFFFFFF;
+                                fpRegs[d * 2 + 1] = imm64 >> 32;
                             }
                             else
                             {
                                 uint32_t imm32 = expandImm(imm, 32);
                                 fpRegs[d] = imm32;
-                                return cycles;
                             }
+                            return cycles;
                         }
                         else if(opc2 == 0)
                         {
