@@ -165,6 +165,10 @@ void apiCallback(int index, uint32_t *regs)
             regs[0] = SDL_GetTicks();
             break;
 
+        case 3: // random
+            regs[0] = rand();
+            break;
+
         default:
             printf("blit API %i\n", index);
             break;
