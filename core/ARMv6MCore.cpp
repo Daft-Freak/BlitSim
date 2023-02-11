@@ -2067,7 +2067,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
         auto eMask = ((1 << (e - 1)) - 1) & ~ 3;
 
         bool sign = imm8 & 0x80;
-        auto exp = ((~imm8 << 1) & 0x80) | ((imm8 & 0x40) ? eMask  : 0)| ((imm8 >> 4) & 3);
+        auto exp = ((~imm8 & 0x40) << (e - 7)) | ((imm8 & 0x40) ? eMask  : 0) | ((imm8 >> 4) & 3);
         auto frac = static_cast<uint64_t>(imm8 & 0xF) << (f - 4);
 
         return (sign ? 1ULL : 0ULL) << (e + f) | static_cast<uint64_t>(exp) << f | frac;
