@@ -2405,9 +2405,9 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                             else // VABS
                             {
                                 if(dWidth)
-                                    dReg(d) = abs(dReg(m));
+                                    dReg(d) = fabs(dReg(m));
                                 else
-                                    sReg(d) = fabs(sReg(m));
+                                    sReg(d) = fabsf(sReg(m));
                             }
 
                             return cycles;
