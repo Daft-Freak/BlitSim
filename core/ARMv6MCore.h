@@ -108,6 +108,7 @@ private:
     void writeMem32(uint32_t addr, uint32_t data, int &cycles, bool sequential = false);
 
     inline bool inIT() {return itState & 0xF;}
+    int checkIT(uint16_t opcode);
     void advanceIT();
 
     int executeTHUMBInstruction();

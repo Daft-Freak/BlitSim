@@ -320,6 +320,65 @@ void ARMv6MCore::writeMem32(uint32_t addr, uint32_t data, int &cycles, bool sequ
     mem.write<uint32_t>(addr, data, cycles, sequential);
 }
 
+int ARMv6MCore::checkIT(uint16_t opcode)
+{
+    auto cond = itState >> 4;
+
+    // check condition
+    bool result = false;
+
+    switch(cond >> 1)
+    {
+        case 0: // EQ/NE
+            result = cpsr & Flag_Z;
+            break;
+        case 1: // CS/CC
+            result = cpsr & Flag_C;
+            break;
+        case 2: // MI/PL
+            result = cpsr & Flag_N;
+            break;
+        case 3: // VS/VC
+            result = cpsr & Flag_V;
+            break;
+        case 4: // HI/LS
+            result = (cpsr & Flag_C) && !(cpsr & Flag_Z);
+            break;
+        case 5: // GE/LT
+            result = !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
+            break;
+        case 6: // GT/LE
+            result = !!(cpsr & Flag_N) == !!(cpsr & Flag_V) && !(cpsr & Flag_Z);
+            break;
+        case 7: // AL
+            result = true;
+            break;
+    }
+
+    if((cond & 1) && cond != 0xF)
+        result = !result;
+
+    if(!result)
+    {
+        if((opcode >> 12) == 0xF || (opcode >> 11) == 0x1D) //32bit
+        {
+            // skip second half
+            decodeOp = fetchOp;
+
+            auto &pc = loReg(Reg::PC);
+            pc += 2;
+    
+            auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
+            assert(mem.verifyPointer(thumbPCPtr, pc));
+            fetchOp = *thumbPCPtr;
+
+            return pcSCycles * 2;
+        }
+        return pcSCycles;
+    }
+    return 0;
+}
+
 void ARMv6MCore::advanceIT()
 {
     if((itState & 7) == 0)
@@ -342,58 +401,9 @@ int ARMv6MCore::executeTHUMBInstruction()
 
     if(inIT())
     {
-        auto cond = itState >> 4;
-
-        // check condition
-        bool result = false;
-
-        switch(cond >> 1)
-        {
-            case 0: // EQ/NE
-                result = cpsr & Flag_Z;
-                break;
-            case 1: // CS/CC
-                result = cpsr & Flag_C;
-                break;
-            case 2: // MI/PL
-                result = cpsr & Flag_N;
-                break;
-            case 3: // VS/VC
-                result = cpsr & Flag_V;
-                break;
-            case 4: // HI/LS
-                result = (cpsr & Flag_C) && !(cpsr & Flag_Z);
-                break;
-            case 5: // GE/LT
-                result = !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
-                break;
-            case 6: // GT/LE
-                result = !!(cpsr & Flag_N) == !!(cpsr & Flag_V) && !(cpsr & Flag_Z);
-                break;
-            case 7: // AL
-                result = true;
-                break;
-        }
-
-        if((cond & 1) && cond != 0xF)
-            result = !result;
-
-        if(!result)
-        {
-            if((opcode >> 12) == 0xF || (opcode >> 11) == 0x1D) //32bit
-            {
-                // skip second half
-                decodeOp = fetchOp;
-
-                pc += 2;
-                auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
-                assert(mem.verifyPointer(thumbPCPtr, pc));
-                fetchOp = *thumbPCPtr;
-
-                return pcSCycles * 2;
-            }
-            return pcSCycles;
-        }
+        int c = checkIT(opcode);
+        if(c)
+            return c;
     }
 
     switch(opcode >> 12)
