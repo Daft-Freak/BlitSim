@@ -336,17 +336,9 @@ int ARMv6MCore::executeTHUMBInstruction()
     decodeOp = fetchOp;
 
     pc += 2;
-    if(pcPtr)
-    {
-        auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
-        assert(mem.verifyPointer(thumbPCPtr, pc));
-        fetchOp = *thumbPCPtr;
-    }
-    else
-    {
-        int tmp;
-        fetchOp = mem.read<uint16_t>(pc, tmp, true);
-    }
+    auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
+    assert(mem.verifyPointer(thumbPCPtr, pc));
+    fetchOp = *thumbPCPtr;
 
     if(inIT())
     {
@@ -394,17 +386,9 @@ int ARMv6MCore::executeTHUMBInstruction()
                 decodeOp = fetchOp;
 
                 pc += 2;
-                if(pcPtr)
-                {
-                    auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
-                    assert(mem.verifyPointer(thumbPCPtr, pc));
-                    fetchOp = *thumbPCPtr;
-                }
-                else
-                {
-                    int tmp;
-                    fetchOp = mem.read<uint16_t>(pc, tmp, true);
-                }
+                auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
+                assert(mem.verifyPointer(thumbPCPtr, pc));
+                fetchOp = *thumbPCPtr;
 
                 return pcSCycles * 2;
             }
@@ -1747,17 +1731,9 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
     decodeOp = fetchOp;
 
     pc += 2;
-    if(pcPtr)
-    {
-        auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
-        assert(mem.verifyPointer(thumbPCPtr, pc));
-        fetchOp = *thumbPCPtr;
-    }
-    else
-    {
-        int tmp;
-        fetchOp = mem.read<uint16_t>(pc, tmp, true);
-    }
+    auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
+    assert(mem.verifyPointer(thumbPCPtr, pc));
+    fetchOp = *thumbPCPtr;
 
     loReg(Reg::PC) = pc;
 
@@ -3813,7 +3789,7 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
         return;
     }
 
-    if(pcPtr && pc >> 24 == loReg(Reg::PC) >> 24)
+    if(pc >> 24 == loReg(Reg::PC) >> 24)
     {
         // memory region didn't change, skip recaclculating ptr/cycles
         [[maybe_unused]] auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
@@ -3822,26 +3798,16 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
     else
     {
         pcPtr = std::as_const(mem).mapAddress(pc); // force const mapAddress
-        if(pcPtr)
-            pcPtr -= pc;
+        assert(pcPtr);
+        pcPtr -= pc;
         pcSCycles = 1;
         pcNCycles = 1;
     }
 
     // refill the pipeline
-    if(pcPtr)
-    {
-        auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
-        decodeOp = *thumbPCPtr++;
-        fetchOp = *thumbPCPtr;
-    }
-    else
-    {
-        // TODO: either fix the optimisation or remove it, this is messy
-        int tmp;
-        decodeOp = mem.read<uint16_t>(pc, tmp, true);
-        fetchOp = mem.read<uint16_t>(pc + 2, tmp, true);
-    }
+    auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
+    decodeOp = *thumbPCPtr++;
+    fetchOp = *thumbPCPtr;
 
     loReg(Reg::PC) = pc + 2; // pointing at last fetch
 }
