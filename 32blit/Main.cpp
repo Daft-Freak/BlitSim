@@ -36,6 +36,7 @@ static ARMv6MCore cpuCore(mem);
 
 static bool fileLoaded = false;
 
+static uint32_t metadataOffset;
 static BlitGameHeader blitHeader;
 
 static bool parseBlit(blit::File &file)
@@ -77,6 +78,8 @@ static bool parseBlit(blit::File &file)
         blit::debugf("Incorrect metadata header!\n");
         return false;
     }
+
+    metadataOffset = length;
 
     uint16_t metadataLen = buf[8] | buf[9] << 8;
 
@@ -157,6 +160,34 @@ void apiCallback(int index, uint32_t *regs)
         case 21: // get_max_us_timer
             regs[0] = api.get_max_us_timer();
             break;
+
+        case 33: // get_metadata
+        {
+            auto ptr = regs[0];
+            int c;
+            auto metadataAddr = 0x90000000 + metadataOffset + 10/*magic/len*/;
+
+            mem.write<uint32_t>(ptr +  0, metadataAddr +  20, c, false); // title
+            mem.write<uint32_t>(ptr +  4, metadataAddr + 191, c, false); // author
+            mem.write<uint32_t>(ptr +  8, metadataAddr +  45, c, false); // description
+            mem.write<uint32_t>(ptr + 12, metadataAddr + 174, c, false); // version
+
+            // extended meta
+            bool hasType = memcmp(mem.mapAddress(metadataAddr + sizeof(RawMetadata)), "BLITTYPE", 8) == 0;
+            if(hasType)
+            {
+                auto typeMetadataAddr = metadataAddr + sizeof(RawMetadata) + 8;
+                mem.write<uint32_t>(ptr + 16, typeMetadataAddr + 17, c, false); // url
+                mem.write<uint32_t>(ptr + 20, typeMetadataAddr, c, false); // category
+            }
+            else
+            {
+                mem.write<uint32_t>(ptr + 16, 0, c, false); // url
+                mem.write<uint32_t>(ptr + 20, 0, c, false); // category
+            }
+
+            break;
+        }
 
         case 34: // set_screen_mode_format
         {
