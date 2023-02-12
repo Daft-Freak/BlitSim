@@ -1469,7 +1469,7 @@ uint32_t ARMv6MCore::getShiftedReg(uint32_t opcode, bool &carry)
     auto ret = loReg(r);
 
     // left shift by immediate 0, do nothing and preserve carry
-    if(imm == 0 && type)
+    if(imm == 0 && !type)
     {
         carry = cpsr & Flag_C;
         return ret;
