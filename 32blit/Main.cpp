@@ -33,7 +33,6 @@ static MemoryBus mem;
 static ARMv6MCore cpuCore(mem);
 
 static bool fileLoaded = false;
-static blit::File blitFile;
 
 static BlitGameHeader blitHeader;
 
@@ -133,16 +132,32 @@ void apiCallback(int index, uint32_t *regs)
     }
 }
 
+static bool openFile(const std::string &filename)
+{
+    static blit::File blitFile;
+
+    if(!blitFile.open(filename))
+        return false;
+    
+    if(!parseBlit(blitFile))
+    {
+        blit::debugf("Failed to parse blit!\n");
+        return false;
+    }
+
+    cpuCore.reset();
+    cpuCore.setAPICallback(apiCallback);
+
+    cpuCore.setSP(0x20020000); // end of DTCM
+    cpuCore.runCall(blitHeader.init);
+
+    return true;
+}
+
 void init()
 {
     if(blit::file_exists("launcher.blit"))
-    {
-        blitFile.open("launcher.blit");
-        fileLoaded = parseBlit(blitFile);
-
-        if(!fileLoaded)
-            blit::debugf("Failed to parse blit!\n");
-    }
+        fileLoaded = openFile("launcher.blit");
 
     if(!fileLoaded)
         return;
