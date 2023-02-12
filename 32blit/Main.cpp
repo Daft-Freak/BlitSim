@@ -110,6 +110,7 @@ void apiCallback(int index, uint32_t *regs)
     const uint32_t screenPtr    = 0x30000000; // (52 bytes)
     const uint32_t paletteAddr  = 0x30000040; // (1024 bytes)
     const uint32_t savePathAddr = 0x30000440; // (1024 bytes)
+    const uint32_t tmpAddr      = 0x30000840; // (1024 bytes)
     const uint32_t fbAddr = 0x3000FC00;
 
     auto getStringData = [](uint32_t strPtr)
@@ -214,6 +215,42 @@ void apiCallback(int index, uint32_t *regs)
         {
             auto fh = fileMap.at(regs[0]);
             regs[0] = api.get_file_length(fh);
+            break;
+        }
+
+        case 11: // list_files
+        {
+            auto path = getStringData(regs[0]);
+            auto callback = regs[1];
+
+            int c;
+            auto invoker = mem.read<uint32_t>(callback + 12, c, false);
+
+            /*
+            struct FileInfo {
+                std::string name;
+                int flags;
+                uint32_t size;
+            };
+            */
+            auto outFileInfo = reinterpret_cast<uint32_t *>(mem.mapAddress(tmpAddr)); // stack allocate?
+            auto outFileName = mem.mapAddress(tmpAddr + 32);
+
+            api.list_files(std::string(path), [&](FileInfo &info)
+            {
+                auto len = std::min(info.name.length(), size_t(1024 - 32));
+                memcpy(outFileName, info.name.data(), len);
+
+                outFileInfo[0] = tmpAddr + 32; // string data
+                outFileInfo[1] = len; // string len
+
+                outFileInfo[6] = info.flags; // flags = dir
+                outFileInfo[7] = info.size; // size
+
+                regs[1] = tmpAddr;
+                cpuCore.runCall(invoker, callback);
+            });
+        
             break;
         }
 
