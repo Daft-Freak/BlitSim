@@ -156,7 +156,11 @@ static bool openFile(const std::string &filename)
 
 void init()
 {
-    if(blit::file_exists("launcher.blit"))
+    auto launchPath = blit::get_launch_path();
+
+    if(launchPath)
+        fileLoaded = openFile(launchPath);
+    else if(blit::file_exists("launcher.blit"))
         fileLoaded = openFile("launcher.blit");
 
     if(!fileLoaded)
