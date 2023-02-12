@@ -4,7 +4,7 @@
 #include <functional>
 #include <string>
 
-namespace blit {
+namespace blithw {
     // misc structs/enums
     struct ButtonState {
         uint32_t state;
