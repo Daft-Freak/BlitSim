@@ -135,6 +135,18 @@ void apiCallback(int index, uint32_t *regs)
             break;
         }
 
+        case 19: // enable_us_timer
+            api.enable_us_timer();
+            break;
+
+        case 20: // get_us_timer
+            regs[0] = api.get_us_timer();
+            break;
+
+        case 21: // get_max_us_timer
+            regs[0] = api.get_max_us_timer();
+            break;
+
         default:
             debugf("blit API %i\n", index);
             break;
