@@ -135,6 +135,8 @@ void ARMv6MCore::runCall(uint32_t addr, uint32_t r0)
     loReg(Reg::R0) = r0;
 
     // fake a BL
+    auto oldPC = loReg(Reg::PC);
+
     loReg(Reg::LR) = 0x8FFFFFF; // somewhere invalid in flash
     updateTHUMBPC(addr & ~ 1);
 
@@ -162,6 +164,10 @@ void ARMv6MCore::runCall(uint32_t addr, uint32_t r0)
         if((sysTickRegs[0]/*SYST_CSR*/ & mask) == mask)
             updateSysTick(exec);
     }
+
+    // restore PC (if we're running nested)
+    if(oldPC)
+        updateTHUMBPC(oldPC);
 }
 
 void ARMv6MCore::setPendingIRQ(int n)
@@ -3834,12 +3840,13 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
 
     if(pc >> 16 == 0x08BA)
     {
+        auto lr = loReg(Reg::LR);
         if(apiCallback)
             apiCallback((pc & 0xFFFF) >> 1, regs);
 
         // fake the return (if this isn't a BL)
-        if(loReg(Reg::PC) != (loReg(Reg::LR) & ~1))
-            updateTHUMBPC(loReg(Reg::LR) & ~1);
+        if(loReg(Reg::PC) != (lr & ~1))
+            updateTHUMBPC(lr & ~1);
         return;
     }
 
