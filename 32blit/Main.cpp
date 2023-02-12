@@ -2,6 +2,7 @@
 #include <cstring>
 
 #include "32blit.hpp"
+#include "engine/api_private.hpp"
 
 #include "ARMv6MCore.h"
 #include "MemoryBus.h"
@@ -125,6 +126,13 @@ void apiCallback(int index, uint32_t *regs)
         case 3: // random
             regs[0] = blit::random();
             break;
+
+        case 5: // debug
+        {
+            auto message = reinterpret_cast<char *>(mem.mapAddress(regs[0]));
+            api.debug(message);
+            break;
+        }
 
         default:
             debugf("blit API %i\n", index);
