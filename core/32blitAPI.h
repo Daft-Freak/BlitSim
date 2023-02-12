@@ -73,16 +73,16 @@ namespace blithw {
 
     // 32blit/engine/api_private.hpp
 
-    using AllocateCallback = uint8_t *(*)(size_t);
+    // using AllocateCallback = uint8_t *(*)(size_t);
 
     constexpr uint16_t api_version_major = 0, api_version_minor = 1;
 
     // template for screen modes
     struct SurfaceTemplate {
-        uint8_t *data = nullptr;
+        uint32_t data;
         Size bounds;
         PixelFormat format;
-        Pen *palette = nullptr;
+        uint32_t palette;
     };
 
     // subset of Surface for API compat
@@ -90,7 +90,7 @@ namespace blithw {
         SurfaceInfo() = default;
         SurfaceInfo(const SurfaceTemplate &surf): data(surf.data), bounds(surf.bounds), format(surf.format), palette(surf.palette) {}
 
-        uint8_t *data = nullptr;
+        uint32_t data;
         Size bounds;
 
         // unused, here for compat reasons
@@ -102,8 +102,8 @@ namespace blithw {
         uint8_t pixel_stride; // unused
         uint16_t row_stride; // unused
 
-        void *mask = nullptr; // unused
-        Pen *palette = nullptr;
+        uint32_t mask; // unused
+        uint32_t palette;
     };
 
     #pragma pack(push, 4)
