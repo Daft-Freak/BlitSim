@@ -193,6 +193,10 @@ void update(uint32_t time)
     if(!fileLoaded)
         return;
 
+    // avoid catch-up logic (emulated tick will also do it)
+    if(blit::now() - time >= 20)
+        return;
+
     // this isn't update, it's the layer above
     cpuCore.runCall(blitHeader.tick, blit::now());
 }
