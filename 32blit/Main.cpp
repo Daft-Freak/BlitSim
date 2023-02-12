@@ -100,23 +100,34 @@ void apiCallback(int index, uint32_t *regs)
 {
     using namespace blit;
 
+    // firmware ram in D2
+    const uint32_t screenPtr = 0x30000000; // (52 bytes)
+    const uint32_t paletteAddr = 0x30000040; // (1024 bytes)
+    const uint32_t fbAddr = 0x3000FC00;
+
     switch(index)
     {
         case 0: // set_screen_mode
         {
-            auto screenPtr = 0x30000000; // in D2
             int cycles = 0;
             set_screen_mode(static_cast<ScreenMode>(regs[0]));
             
-            mem.write<uint32_t>(screenPtr, 0x3000FC00, cycles, false); // .data = framebuffer
+            mem.write<uint32_t>(screenPtr, fbAddr, cycles, false); // .data = framebuffer
 
             mem.write<uint32_t>(screenPtr + 4, screen.bounds.w, cycles, false); // .bounds.w
             mem.write<uint32_t>(screenPtr + 8, screen.bounds.h, cycles, false); // .bounds.h
 
             mem.write<uint32_t>(screenPtr + 36, static_cast<int>(screen.format), cycles, false); // .format
-            mem.write<uint32_t>(screenPtr + 48, 0, cycles, false); // .palette = null (TODO: palette mode)
+            mem.write<uint32_t>(screenPtr + 48, screen.palette ? paletteAddr : 0, cycles, false); // .palette
 
             regs[0] = screenPtr; // return screen ptr
+            break;
+        }
+
+        case 1: // set_screen_palette
+        {
+            api.set_screen_palette(reinterpret_cast<Pen *>(mem.mapAddress(regs[0])), regs[1]);
+            memcpy(mem.mapAddress(paletteAddr), mem.mapAddress(regs[0]), regs[1] * 4);
             break;
         }
 
@@ -146,6 +157,27 @@ void apiCallback(int index, uint32_t *regs)
         case 21: // get_max_us_timer
             regs[0] = api.get_max_us_timer();
             break;
+
+        case 34: // set_screen_mode_format
+        {
+            auto inTemp = reinterpret_cast<blithw::SurfaceTemplate *>(mem.mapAddress(regs[1]));
+
+            SurfaceTemplate temp{nullptr, {inTemp->bounds.w, inTemp->bounds.h}, static_cast<PixelFormat>(inTemp->format), nullptr};
+            regs[0] = api.set_screen_mode_format(static_cast<ScreenMode>(regs[0]), temp);
+
+            // sync screen
+            screen = Surface(temp.data, temp.format, temp.bounds);
+            screen.palette = temp.palette;
+
+            // copy template out
+            inTemp->data = fbAddr;
+            inTemp->bounds = {temp.bounds.w, temp.bounds.h};
+            inTemp->format = static_cast<blithw::PixelFormat>(temp.format);
+            if(temp.palette)
+                inTemp->palette = paletteAddr;
+
+            break;
+        }
 
         default:
             debugf("blit API %i\n", index);
