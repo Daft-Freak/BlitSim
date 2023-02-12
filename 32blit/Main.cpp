@@ -35,6 +35,7 @@ static MemoryBus mem;
 static ARMv6MCore cpuCore(mem);
 
 static bool fileLoaded = false;
+std::string launchFile;
 
 static uint32_t metadataOffset;
 static BlitGameHeader blitHeader;
@@ -287,6 +288,16 @@ void apiCallback(int index, uint32_t *regs)
             regs[0] = api.get_max_us_timer();
             break;
 
+        case 24: // launch
+        {
+            launchFile = reinterpret_cast<char *>(mem.mapAddress(regs[0]));
+            break;
+        }
+
+        case 26: // get_type_handler_metadata
+            regs[0] = 0;
+            break;
+
         case 33: // get_metadata
         {
             auto ptr = regs[0];
@@ -414,4 +425,10 @@ void update(uint32_t time)
 
     // this isn't update, it's the layer above
     cpuCore.runCall(blitHeader.tick, blit::now());
+
+    if(!launchFile.empty())
+    {
+        openFile(launchFile);
+        launchFile.clear();
+    }
 }
