@@ -4,6 +4,7 @@
 #include "32blit.hpp"
 #include "engine/api_private.hpp"
 
+#include "32blitAPI.h"
 #include "ARMv6MCore.h"
 #include "MemoryBus.h"
 
@@ -204,6 +205,11 @@ void update(uint32_t time)
     // avoid catch-up logic (emulated tick will also do it)
     if(blit::now() - time >= 20)
         return;
+
+    auto api = reinterpret_cast<blithw::API *>(mem.mapAddress(0xF800));
+    api->buttons.state = blit::buttons.state;
+    api->joystick.x = blit::joystick.x;
+    api->joystick.y = blit::joystick.y;
 
     // this isn't update, it's the layer above
     cpuCore.runCall(blitHeader.tick, blit::now());
