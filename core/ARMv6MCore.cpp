@@ -3648,7 +3648,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
                     auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
                     auto mReg = static_cast<Reg>(opcode & 0xF);
 
-                    loReg(dReg) = __builtin_clz(loReg(mReg));
+                    loReg(dReg) = loReg(mReg) == 0 ? 32 : __builtin_clz(loReg(mReg));
 
                     return pcSCycles * 2;
                 }
