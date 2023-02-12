@@ -39,6 +39,9 @@ static bool fileLoaded = false;
 static uint32_t metadataOffset;
 static BlitGameHeader blitHeader;
 
+static std::map<uint32_t, void*> fileMap; // ptr size mismatch
+static uint32_t nextFileId = 1;
+
 static bool parseBlit(blit::File &file)
 {
     uint8_t buf[10];
@@ -109,6 +112,16 @@ void apiCallback(int index, uint32_t *regs)
     const uint32_t savePathAddr = 0x30000440; // (1024 bytes)
     const uint32_t fbAddr = 0x3000FC00;
 
+    auto getStringData = [](uint32_t strPtr)
+    {
+        int c;
+        auto strDataPtr = mem.read<uint32_t>(strPtr, c, false);
+        auto strLen = mem.read<uint32_t>(strPtr + 4, c, false);
+        auto strData = reinterpret_cast<const char *>(mem.mapAddress(strDataPtr));
+        
+        return std::string_view(strData, strLen);
+    };
+
     switch(index)
     {
         case 0: // set_screen_mode
@@ -147,6 +160,60 @@ void apiCallback(int index, uint32_t *regs)
         {
             auto message = reinterpret_cast<char *>(mem.mapAddress(regs[0]));
             api.debug(message);
+            break;
+        }
+
+        case 6: // open_file
+        {
+            auto file = getStringData(regs[0]);
+            int mode = regs[1];
+
+            auto ret = api.open_file(std::string(file), mode);
+
+            if(ret)
+            {
+                fileMap.emplace(nextFileId, ret);
+                regs[0] = nextFileId++;
+            }
+            else
+                regs[0] = 0;
+            break;
+        }
+
+        case 7: // read_file
+        {
+            auto fh = fileMap.at(regs[0]);
+            auto offset = regs[1];
+            auto length = regs[2];
+            auto buffer = reinterpret_cast<char *>(mem.mapAddress(regs[3]));
+
+            regs[0] = api.read_file(fh, offset, length, buffer);
+            break;
+        }
+
+        case 8: // write_file
+        {
+            auto fh = fileMap.at(regs[0]);
+            auto offset = regs[1];
+            auto length = regs[2];
+            auto buffer = reinterpret_cast<char *>(mem.mapAddress(regs[3]));
+
+            regs[0] = api.write_file(fh, offset, length, buffer);
+            break;
+        }
+
+        case 9: // close_file
+        {
+            auto fh = fileMap.at(regs[0]);
+            fileMap.erase(regs[0]);
+            regs[0] = api.close_file(fh);
+            break;
+        }
+
+        case 10: // get_file_length
+        {
+            auto fh = fileMap.at(regs[0]);
+            regs[0] = api.get_file_length(fh);
             break;
         }
 
