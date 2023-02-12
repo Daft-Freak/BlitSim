@@ -104,8 +104,9 @@ void apiCallback(int index, uint32_t *regs)
     using namespace blit;
 
     // firmware ram in D2
-    const uint32_t screenPtr = 0x30000000; // (52 bytes)
-    const uint32_t paletteAddr = 0x30000040; // (1024 bytes)
+    const uint32_t screenPtr    = 0x30000000; // (52 bytes)
+    const uint32_t paletteAddr  = 0x30000040; // (1024 bytes)
+    const uint32_t savePathAddr = 0x30000440; // (1024 bytes)
     const uint32_t fbAddr = 0x3000FC00;
 
     switch(index)
@@ -146,6 +147,23 @@ void apiCallback(int index, uint32_t *regs)
         {
             auto message = reinterpret_cast<char *>(mem.mapAddress(regs[0]));
             api.debug(message);
+            break;
+        }
+
+        case 17: // get_save_path
+        {
+            auto path = api.get_save_path();
+            auto outPath = reinterpret_cast<char *>(mem.mapAddress(savePathAddr));
+
+            // append the real title
+            auto metadataAddr = 0x90000000 + metadataOffset + 10/*magic/len*/;
+            auto metaTitle  = reinterpret_cast<char *>(mem.mapAddress(metadataAddr +  20));
+            snprintf(reinterpret_cast<char *>(mem.mapAddress(savePathAddr)), 1024, "%s%s/", path, metaTitle);
+
+            if(!directory_exists(outPath))
+                create_directory(outPath);
+
+            regs[0] = savePathAddr;
             break;
         }
 
