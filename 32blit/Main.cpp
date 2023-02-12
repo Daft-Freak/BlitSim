@@ -383,15 +383,6 @@ void init()
         fileLoaded = openFile(launchPath);
     else if(blit::file_exists("launcher.blit"))
         fileLoaded = openFile("launcher.blit");
-
-    if(!fileLoaded)
-        return;
-
-    cpuCore.reset();
-    cpuCore.setAPICallback(apiCallback);
-
-    cpuCore.setSP(0x20020000); // end of DTCM
-    cpuCore.runCall(blitHeader.init);
 }
 
 void render(uint32_t time)
