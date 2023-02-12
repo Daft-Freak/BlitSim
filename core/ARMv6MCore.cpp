@@ -2825,6 +2825,50 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
             loReg(dstReg) = imm;
             return pcSCycles * 2;
         }
+        case 0x8: // SSAT
+        case 0x9: // SSAT/SSAT16
+        {
+            auto imm = ((opcode >> 6) & 3) | ((opcode >> 10) & 0x1C);
+            auto satTo = (opcode & 0x1F) + 1;
+
+            if(op == 9 && imm == 0) // SSAT16
+            {}
+            else // SSAT
+            {
+                auto val = static_cast<int32_t>(reg(nReg));
+
+                if(op == 8) // LSL
+                    val <<= imm;
+                else // ASR
+                {
+                    assert(imm);
+                    val = val >> imm;
+                }
+
+                bool sat = false;
+
+                auto max = (1 << (satTo - 1)) - 1;
+                auto min = -(1 << (satTo - 1));
+
+                if(val > max)
+                {
+                    val = max;
+                    sat = true;
+                }
+                else if(val < min)
+                {
+                    val = min;
+                    sat = true;
+                }
+
+                loReg(dstReg) = val;
+
+                cpsr = (cpsr & ~Flag_Q) | (sat ? Flag_Q : 0);
+
+                return pcSCycles * 2;
+            }
+            break;
+        }
         case 0xB: // BFI/BFC
         {
             int msb = (opcode & 0x1F);

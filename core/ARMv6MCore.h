@@ -73,6 +73,7 @@ private:
         Flag_GE3 = (1 << 19),
 
         // condition codes
+        Flag_Q = (1 << 27),
         Flag_V = (1 << 28),
         Flag_C = (1 << 29),
         Flag_Z = (1 << 30),
