@@ -13,9 +13,15 @@ else()
   add_compile_options("-Wall" "-Wextra" "-Wdouble-promotion" "-Wno-unused-parameter")
 endif()
 
+option(BUILD_32BLIT "Build 32blit UI" ON)
 option(BUILD_SDL "Build minimal SDL UI" ON)
 
 add_subdirectory(core)
+
+if(BUILD_32BLIT)
+    find_package (32BLIT CONFIG REQUIRED PATHS ../32blit-sdk)
+    add_subdirectory(32blit BlitSim32)
+endif()
 
 if(BUILD_SDL)
     add_subdirectory(minsdl)
