@@ -271,6 +271,10 @@ void apiCallback(int index, uint32_t *regs)
             break;
         }
 
+        case 18: // is_storage_available
+            regs[0] = 1;
+            break;
+
         case 19: // enable_us_timer
             api.enable_us_timer();
             break;
