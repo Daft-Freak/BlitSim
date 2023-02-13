@@ -104,7 +104,7 @@ void ARMv6MCore::doRunCall(uint32_t addr, uint32_t r0, uint32_t r1)
 
             // advance IT
             // outside of executeTHUMBInstruction as it needs to be after executing the instruction...
-            if(inIT())
+            if(itState)
             {
                 if(!itStart)
                     advanceIT();
@@ -235,7 +235,7 @@ void ARMv6MCore::executeTHUMBInstruction()
     assert(mem.verifyPointer(thumbPCPtr, pc));
     fetchOp = *thumbPCPtr;
 
-    if(inIT() && checkIT(opcode))
+    if(itState && checkIT(opcode))
         return;
 
     switch(opcode >> 12)
