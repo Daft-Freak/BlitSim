@@ -37,6 +37,8 @@ void MemoryBus::reset()
     api->version_major = blithw::api_version_major;
     api->version_minor = blithw::api_version_minor;
 
+    api->channels = 0x30000C40;
+
     // fake addresses in flash region
     api->set_screen_mode = 0x08BA0001;
     api->set_screen_palette = 0x08BA0003;

@@ -43,6 +43,14 @@ static BlitGameHeader blitHeader;
 static std::map<uint32_t, void*> fileMap; // ptr size mismatch
 static uint32_t nextFileId = 1;
 
+// firmware ram in D2
+const uint32_t screenPtr    = 0x30000000; // (52 bytes)
+const uint32_t paletteAddr  = 0x30000040; // (1024 bytes)
+const uint32_t savePathAddr = 0x30000440; // (1024 bytes)
+const uint32_t tmpAddr      = 0x30000840; // (1024 bytes)
+const uint32_t channelsAddr = 0x30000C40; // (1504 bytes (188 * 8))
+const uint32_t fbAddr = 0x3000FC00;
+
 static bool parseBlit(blit::File &file)
 {
     uint8_t buf[10];
@@ -106,13 +114,6 @@ static bool parseBlit(blit::File &file)
 void apiCallback(int index, uint32_t *regs)
 {
     using namespace blit;
-
-    // firmware ram in D2
-    const uint32_t screenPtr    = 0x30000000; // (52 bytes)
-    const uint32_t paletteAddr  = 0x30000040; // (1024 bytes)
-    const uint32_t savePathAddr = 0x30000440; // (1024 bytes)
-    const uint32_t tmpAddr      = 0x30000840; // (1024 bytes)
-    const uint32_t fbAddr = 0x3000FC00;
 
     auto getStringData = [](uint32_t strPtr)
     {
@@ -353,6 +354,49 @@ void apiCallback(int index, uint32_t *regs)
     }
 }
 
+static uint32_t firmwareMemRead(uint32_t addr, uint32_t val, int width)
+{
+    if(addr >= channelsAddr && addr < channelsAddr + 188 * 8)
+    {
+        int ch = (addr - channelsAddr) / 188;
+        unsigned int chOff = (addr - channelsAddr) % 188;
+        
+        if(chOff < offsetof(blithw::AudioChannel, user_data))
+        {
+            // everything matches until the user callback ptrs
+            auto chanData = reinterpret_cast<uint8_t *>(blit::channels + ch);
+
+            val = 0;
+            for(int i = 0; i < width; i++)
+                val |= chanData[chOff++] << (i * 8);
+        }
+        else
+            blit::debugf("audio r %08X (%i)\n", addr, width);
+    }
+    return val;
+}
+
+static uint32_t firmwareMemWrite(uint32_t addr, uint32_t val, int width)
+{
+    if(addr >= channelsAddr && addr < channelsAddr + 188 * 8)
+    {
+        int ch = (addr - channelsAddr) / 188;
+        unsigned int chOff = (addr - channelsAddr) % 188;
+        
+        if(chOff < offsetof(blithw::AudioChannel, user_data))
+        {
+            // everything matches until the user callback ptrs
+            auto chanData = reinterpret_cast<uint8_t *>(blit::channels + ch);
+
+            for(int i = 0; i < width; i++, val >>= 8)
+                chanData[chOff++] = val;
+        }
+        else
+            blit::debugf("audio w %08X(ch %i off %i) = %08X (%i)\n", addr, ch, chOff, val, width);
+    }
+    return val;
+}
+
 static bool openFile(const std::string &filename)
 {
     static blit::File blitFile;
@@ -365,6 +409,8 @@ static bool openFile(const std::string &filename)
         blit::debugf("Failed to parse blit!\n");
         return false;
     }
+
+    mem.setFirmwareRAMCallbacks(firmwareMemRead, firmwareMemWrite);
 
     cpuCore.reset();
     cpuCore.setAPICallback(apiCallback);
