@@ -127,33 +127,33 @@ void ARMv6MCore::doRunCall(uint32_t addr, uint32_t r0, uint32_t r1)
         loReg(Reg::PC) = 0;
 }
 
-uint8_t ARMv6MCore::readMem8(uint32_t addr, int &cycles, bool sequential)
+uint8_t ARMv6MCore::readMem8(uint32_t addr)
 {
     return mem.read<uint8_t>(addr);
 }
 
-uint16_t ARMv6MCore::readMem16(uint32_t addr, int &cycles, bool sequential)
+uint16_t ARMv6MCore::readMem16(uint32_t addr)
 {
     return mem.read<uint16_t>(addr);
 }
 
 
-uint32_t ARMv6MCore::readMem32(uint32_t addr, int &cycles, bool sequential)
+uint32_t ARMv6MCore::readMem32(uint32_t addr)
 {
     return mem.read<uint32_t>(addr);
 }
 
-void ARMv6MCore::writeMem8(uint32_t addr, uint8_t data, int &cycles, bool sequential)
+void ARMv6MCore::writeMem8(uint32_t addr, uint8_t data)
 {
     mem.write<uint8_t>(addr, data);
 }
 
-void ARMv6MCore::writeMem16(uint32_t addr, uint16_t data, int &cycles, bool sequential)
+void ARMv6MCore::writeMem16(uint32_t addr, uint16_t data)
 {
     mem.write<uint16_t>(addr, data);
 }
 
-void ARMv6MCore::writeMem32(uint32_t addr, uint32_t data, int &cycles, bool sequential)
+void ARMv6MCore::writeMem32(uint32_t addr, uint32_t data)
 {
     mem.write<uint32_t>(addr, data);
 }
@@ -714,7 +714,7 @@ int ARMv6MCore::doTHUMB06PCRelLoad(uint16_t opcode, uint32_t pc)
 
     // pc + 4, bit 1 forced to 0
     int cycles = 0;
-    loReg(dstReg) = readMem32((pc & ~2) + (word << 2), cycles);
+    loReg(dstReg) = readMem32((pc & ~2) + (word << 2));
 
     return cycles + pcSCycles;
 }
@@ -737,7 +737,7 @@ int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
             if(hFlag && !(addr & 1)) // LDRSH, (misaligned gets treated as a byte!)
             {
                 int cycles = 0;
-                auto val = readMem16(addr, cycles);
+                auto val = readMem16(addr);
                 if(val & 0x8000)
                     loReg(dstReg) = val | 0xFFFF0000;
                 else
@@ -748,7 +748,7 @@ int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
             else // LDRSB
             {
                 int cycles = 0;
-                auto val = readMem8(addr, cycles);
+                auto val = readMem8(addr);
                 if(val & 0x80)
                     loReg(dstReg) = val | 0xFFFFFF00;
                 else
@@ -762,13 +762,13 @@ int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
             if(hFlag) // LDRH
             {
                 int cycles = 0;
-                loReg(dstReg) = readMem16(addr, cycles);
+                loReg(dstReg) = readMem16(addr);
                 return cycles + pcSCycles;
             }
             else // STRH
             {
                 int cycles = 0;
-                writeMem16(addr, loReg(dstReg), cycles);
+                writeMem16(addr, loReg(dstReg));
                 return cycles + pcNCycles;
             }
         }
@@ -782,9 +782,9 @@ int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
         {
             int cycles = 0;
             if(isByte) // LDRB
-                loReg(dstReg) = readMem8(addr, cycles);
+                loReg(dstReg) = readMem8(addr);
             else // LDR
-                loReg(dstReg) = readMem32(addr, cycles);
+                loReg(dstReg) = readMem32(addr);
 
             return cycles + pcSCycles;
         }
@@ -792,9 +792,9 @@ int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
         {
             int cycles = 0;
             if(isByte) // STRB
-                writeMem8(addr, loReg(dstReg), cycles);
+                writeMem8(addr, loReg(dstReg));
             else // STR
-                writeMem32(addr, loReg(dstReg), cycles);
+                writeMem32(addr, loReg(dstReg));
 
             return cycles + pcNCycles;
         }
@@ -812,13 +812,13 @@ int ARMv6MCore::doTHUMB09LoadStoreWord(uint16_t opcode, uint32_t pc)
     if(isLoad) // LDR
     {
         int cycles = 0;
-        loReg(dstReg) = readMem32(addr, cycles);
+        loReg(dstReg) = readMem32(addr);
         return cycles + pcSCycles;
     }
     else // STR
     {
         int cycles = 0;
-        writeMem32(addr, loReg(dstReg), cycles);
+        writeMem32(addr, loReg(dstReg));
         return cycles + pcNCycles;
     }
 }
@@ -834,13 +834,13 @@ int ARMv6MCore::doTHUMB09LoadStoreByte(uint16_t opcode, uint32_t pc)
     if(isLoad) // LDRB
     {
         int cycles = 0;
-        loReg(dstReg) = readMem8(addr, cycles);
+        loReg(dstReg) = readMem8(addr);
         return cycles + pcSCycles;
     }
     else // STRB
     {
         int cycles = 0;
-        writeMem8(addr, loReg(dstReg), cycles);
+        writeMem8(addr, loReg(dstReg));
         return cycles + pcNCycles;
     }
 }
@@ -856,13 +856,13 @@ int ARMv6MCore::doTHUMB10LoadStoreHalf(uint16_t opcode, uint32_t pc)
     if(isLoad) // LDRH
     {
         int cycles = 0;
-        loReg(dstReg) = readMem16(addr, cycles);
+        loReg(dstReg) = readMem16(addr);
         return cycles + pcSCycles;
     }
     else // STRH
     {
         int cycles = 0;
-        writeMem16(addr, loReg(dstReg), cycles);
+        writeMem16(addr, loReg(dstReg));
         return cycles + pcNCycles;
     }
 }
@@ -878,13 +878,13 @@ int ARMv6MCore::doTHUMB11SPRelLoadStore(uint16_t opcode, uint32_t pc)
     if(isLoad)
     {
         int cycles = 0;
-        loReg(dstReg) = readMem32(addr, cycles);
+        loReg(dstReg) = readMem32(addr);
         return cycles + pcSCycles;
     }
     else
     {
         int cycles = 0;
-        writeMem32(addr, loReg(dstReg), cycles);
+        writeMem32(addr, loReg(dstReg));
         return cycles + pcNCycles;
     }
 }
@@ -1150,9 +1150,9 @@ int ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
     {
         // empty list loads/stores PC... even though it isn't usually possible here
         if(isLoad)
-            updateTHUMBPC(readMem32(addr & ~3, cycles));
+            updateTHUMBPC(readMem32(addr & ~3));
         else
-            writeMem32(addr & ~3, pc + 2, cycles);
+            writeMem32(addr & ~3, pc + 2);
 
         reg(baseReg) = addr + 0x40;
 
@@ -1171,7 +1171,7 @@ int ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
         addr &= ~3;
 
     int i = 0;
-    bool first = true, seq = false;
+    bool first = true;
 
     // prevent overriding base for loads
     // "A LDM will always overwrite the updated base if the base is in the list."
@@ -1184,9 +1184,9 @@ int ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
             continue;
 
         if(isLoad)
-            regs[i] = readMem32(addr, cycles, seq);
+            regs[i] = readMem32(addr);
         else
-            writeMem32(addr, regs[i], cycles, seq);
+            writeMem32(addr, regs[i]);
 
         // base write-back is on the second cycle of the instruction
         // which is when the first reg is written
@@ -1194,7 +1194,6 @@ int ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
             reg(baseReg) = endAddr;
 
         first = false;
-        seq = true;
 
         addr += 4;
     }
@@ -1644,7 +1643,6 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
 
     auto addr = loReg(baseReg);
 
-    bool seq = true;
     int cycles = pcSCycles * 2;
 
     bool baseInList = regList & (1 << static_cast<int>(baseReg));
@@ -1662,11 +1660,10 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
                     continue;
 
                 if(i == 15)
-                    updateTHUMBPC(readMem32(addr, cycles, seq) & ~1);
+                    updateTHUMBPC(readMem32(addr) & ~1);
                 else
-                    regs[i] = readMem32(addr, cycles, seq);
+                    regs[i] = readMem32(addr);
 
-                seq = false;
                 addr += 4;
             }
 
@@ -1692,11 +1689,10 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
                     continue;
 
                 if(i == 15)
-                    updateTHUMBPC(readMem32(addr, cycles, seq) & ~1);
+                    updateTHUMBPC(readMem32(addr) & ~1);
                 else
-                    regs[i] = readMem32(addr, cycles, seq);
+                    regs[i] = readMem32(addr);
 
-                seq = false;
                 addr += 4;
             }
 
@@ -1719,8 +1715,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
                 if(!(regList & 1))
                     continue;
 
-                writeMem32(addr, regs[i], cycles, seq);
-                seq = false;
+                writeMem32(addr, regs[i]);
                 addr += 4;
             }
 
@@ -1745,8 +1740,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
                 if(!(regList & 1))
                     continue;
 
-                writeMem32(addr, regs[i], cycles, seq);
-                seq = false;
+                writeMem32(addr, regs[i]);
                 addr += 4;
             }
 
@@ -1786,9 +1780,9 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
             int cycles = pcSCycles * 3 + pcNCycles;
             int offset;
             if(op3 & 1) // TBH
-                offset = readMem16(addr + loReg(indexReg) * 2, cycles);
+                offset = readMem16(addr + loReg(indexReg) * 2);
             else
-                offset = readMem8(addr + loReg(indexReg), cycles);
+                offset = readMem8(addr + loReg(indexReg));
 
             updateTHUMBPC((pc - 2) + offset * 2);
 
@@ -1811,8 +1805,8 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
 
         int cycles = pcSCycles * 2;
 
-        writeMem32(addr, loReg(dstReg), cycles);
-        writeMem32(addr + 4, loReg(dstReg2), cycles);
+        writeMem32(addr, loReg(dstReg));
+        writeMem32(addr + 4, loReg(dstReg2));
 
         if(writeback)
             loReg(baseReg) = offsetAddr;
@@ -1834,8 +1828,8 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
 
         int cycles = pcSCycles * 2;
 
-        loReg(dstReg) = readMem32(addr, cycles);
-        loReg(dstReg2) = readMem32(addr + 4, cycles);
+        loReg(dstReg) = readMem32(addr);
+        loReg(dstReg2) = readMem32(addr + 4);
 
         if(writeback)
             loReg(baseReg) = offsetAddr;
@@ -2500,13 +2494,13 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
         {
             if(dWidth)
             {
-                fpRegs[(d + i) * 2] = readMem32(addr, cycles);
-                fpRegs[(d + i) * 2 + 1] = readMem32(addr + 4, cycles);
+                fpRegs[(d + i) * 2] = readMem32(addr);
+                fpRegs[(d + i) * 2 + 1] = readMem32(addr + 4);
                 addr += 8;
             }
             else
             {
-                fpRegs[d + i] = readMem32(addr, cycles);
+                fpRegs[d + i] = readMem32(addr);
                 addr += 4;
             }
         }
@@ -2555,13 +2549,13 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
         {
             if(dWidth)
             {
-                writeMem32(addr, fpRegs[(d + i) * 2], cycles);
-                writeMem32(addr + 4, fpRegs[(d + i) * 2 + 1], cycles);
+                writeMem32(addr, fpRegs[(d + i) * 2]);
+                writeMem32(addr + 4, fpRegs[(d + i) * 2 + 1]);
                 addr += 8;
             }
             else
             {
-                writeMem32(addr, fpRegs[d + i], cycles);
+                writeMem32(addr, fpRegs[d + i]);
                 addr += 4;
             }
         }
@@ -3033,11 +3027,11 @@ int ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
         switch(op1 & 3)
         {
             case 0:
-                writeMem8(addr, loReg(dstReg), cycles); break; // STRB
+                writeMem8(addr, loReg(dstReg)); break; // STRB
             case 1:
-                writeMem16(addr, loReg(dstReg), cycles); break; // STRH
+                writeMem16(addr, loReg(dstReg)); break; // STRH
             case 2:
-                writeMem32(addr, loReg(dstReg), cycles); break; // STR
+                writeMem32(addr, loReg(dstReg)); break; // STR
         }
 
         return cycles;
@@ -3058,11 +3052,11 @@ int ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
         switch(op1 & 3)
         {
             case 0:
-                writeMem8(addr, loReg(dstReg), cycles); break; // STRB
+                writeMem8(addr, loReg(dstReg)); break; // STRB
             case 1:
-                writeMem16(addr, loReg(dstReg), cycles); break; // STRH
+                writeMem16(addr, loReg(dstReg)); break; // STRH
             case 2:
-                writeMem32(addr, loReg(dstReg), cycles); break; // STR
+                writeMem32(addr, loReg(dstReg)); break; // STR
         }
 
         if(writeback)
@@ -3082,11 +3076,11 @@ int ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
         switch(op1 & 3)
         {
             case 0:
-                writeMem8(addr, loReg(dstReg), cycles); break; // STRB
+                writeMem8(addr, loReg(dstReg)); break; // STRB
             case 1:
-                writeMem16(addr, loReg(dstReg), cycles); break; // STRH
+                writeMem16(addr, loReg(dstReg)); break; // STRH
             case 2:
-                writeMem32(addr, loReg(dstReg), cycles); break; // STR
+                writeMem32(addr, loReg(dstReg)); break; // STR
         }
 
         return cycles;
@@ -3118,7 +3112,7 @@ int ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
 
         uint32_t addr = loReg(baseReg) + (loReg(mReg) << shift);
 
-        uint32_t data = readMem8(addr, cycles);
+        uint32_t data = readMem8(addr);
 
         if(isSigned && (data & 0x80))
             data |= 0xFFFFFF00;
@@ -3139,7 +3133,7 @@ int ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
 
             uint32_t addr = loReg(baseReg) + offset;
 
-            uint32_t data = readMem8(addr, cycles);
+            uint32_t data = readMem8(addr);
 
             if(isSigned && (data & 0x80))
                 data |= 0xFFFFFF00;
@@ -3159,7 +3153,7 @@ int ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
             uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
             uint32_t addr = index ? offsetAddr : loReg(baseReg);
 
-            uint32_t data = readMem8(addr, cycles);
+            uint32_t data = readMem8(addr);
 
             if(isSigned && (data & 0x80))
                 data |= 0xFFFFFF00;
@@ -3202,7 +3196,7 @@ int ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
 
         uint32_t addr = loReg(baseReg) + (loReg(mReg) << shift);
 
-        uint32_t data = readMem16(addr, cycles);
+        uint32_t data = readMem16(addr);
 
         if(isSigned && (data & 0x8000))
             data |= 0xFFFF0000;
@@ -3223,7 +3217,7 @@ int ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
 
             uint32_t addr = loReg(baseReg) + offset;
 
-            uint32_t data = readMem16(addr, cycles);
+            uint32_t data = readMem16(addr);
 
             if(isSigned && (data & 0x8000))
                 data |= 0xFFFF0000;
@@ -3243,7 +3237,7 @@ int ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
             uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
             uint32_t addr = index ? offsetAddr : loReg(baseReg);
 
-            uint32_t data = readMem16(addr, cycles);
+            uint32_t data = readMem16(addr);
 
             if(isSigned && (data & 0x8000))
                 data |= 0xFFFF0000;
@@ -3287,7 +3281,7 @@ int ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
         else
             addr -= offset;
         
-        data = readMem32(addr, cycles);
+        data = readMem32(addr);
     }
     else if(op1 == 0 && op2 == 0) // LDR (register)
     {
@@ -3296,7 +3290,7 @@ int ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
 
         uint32_t addr = loReg(baseReg) + (loReg(mReg) << shift);
 
-        data = readMem32(addr, cycles);
+        data = readMem32(addr);
     }
     else if(op1 == 0 && (op2 & 0x3C) == 0x38) // LDRT
     {
@@ -3311,7 +3305,7 @@ int ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
 
             uint32_t addr = loReg(baseReg) + offset;
 
-            data = readMem32(addr, cycles);
+            data = readMem32(addr);
         }
         else // +/- 8 bit imm
         {
@@ -3324,8 +3318,7 @@ int ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
             uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
             uint32_t addr = index ? offsetAddr : loReg(baseReg);
 
-            int cycles = pcSCycles * 2;
-            data = readMem32(addr, cycles);
+            data = readMem32(addr);
 
             if(writeback)
                 loReg(baseReg) = offsetAddr;
