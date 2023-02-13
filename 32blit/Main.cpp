@@ -377,6 +377,10 @@ void apiCallback(int index, uint32_t *regs)
             regs[0] = 0;
             break;
 
+        case 27: // get_launch_path
+            regs[0] = 0;
+            break;
+
         case 28: // is_multiplayer_connected
             regs[0] = api.is_multiplayer_connected();
             break;
