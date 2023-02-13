@@ -267,6 +267,36 @@ void apiCallback(int index, uint32_t *regs)
         
             break;
         }
+        
+        case 12: // file_exists
+        {
+            regs[0] = api.file_exists(std::string(getStringData(regs[0])));
+            break;
+        }
+
+        case 13: // directory_exists
+        {
+            regs[0] = api.directory_exists(std::string(getStringData(regs[0])));
+            break;
+        }
+
+        case 14: // create_directory
+        {
+            regs[0] = api.create_directory(std::string(getStringData(regs[0])));
+            break;
+        }
+
+        case 15: // rename_file
+        {
+            regs[0] = api.rename_file(std::string(getStringData(regs[0])), std::string(getStringData(regs[1])));
+            break;
+        }
+
+        case 16: // remove_file
+        {
+            regs[0] = api.remove_file(std::string(getStringData(regs[0])));
+            break;
+        }
 
         case 17: // get_save_path
         {
