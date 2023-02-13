@@ -272,8 +272,7 @@ void apiCallback(int index, uint32_t *regs)
                 outFileInfo[6] = info.flags; // flags = dir
                 outFileInfo[7] = info.size; // size
 
-                regs[1] = tmpAddr;
-                cpuCore.runCallLocked(invoker, callback);
+                cpuCore.runCallLocked(invoker, callback, tmpAddr);
             });
         
             break;
