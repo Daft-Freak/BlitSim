@@ -123,6 +123,17 @@ static void waveBufferCallback(blit::AudioChannel &channel)
     cpuCore.runCallThread(cb, chAddr);
 }
 
+static void multiplayerMessageReceived(const uint8_t *data, uint16_t len)
+{
+    auto api = reinterpret_cast<blithw::API *>(mem.mapAddress(0xF800));
+
+    if(api->message_received)
+    {
+        memcpy(mem.mapAddress(tmpAddr), data, len);
+        cpuCore.runCall(api->message_received, tmpAddr, len);
+    }
+}
+
 void apiCallback(int index, uint32_t *regs)
 {
     using namespace blit;
@@ -367,6 +378,18 @@ void apiCallback(int index, uint32_t *regs)
             regs[0] = 0;
             break;
 
+        case 28: // is_multiplayer_connected
+            regs[0] = api.is_multiplayer_connected();
+            break;
+
+        case 29: // set_multiplayer_enabled
+            api.set_multiplayer_enabled(regs[0]);
+            break;
+
+        case 30: // send_message
+            api.send_message(mem.mapAddress(regs[0]), regs[1]);
+            break;
+
         case 33: // get_metadata
         {
             auto ptr = regs[0];
@@ -508,6 +531,8 @@ void init()
         fileLoaded = openFile(launchPath);
     else if(blit::file_exists("launcher.blit"))
         fileLoaded = openFile("launcher.blit");
+
+    blit::message_received = multiplayerMessageReceived;
 
     for(int i = 0; i < CHANNEL_COUNT; i++)
         blit::channels[i].user_data = waveChannelData[i];
