@@ -2921,6 +2921,23 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
             }
             break;
         }
+        case 0xA: // SBFX
+        {
+            int lsbit = ((opcode >> 10) & 0x1C) | ((opcode >> 6) & 3);
+            int width = (opcode & 0x1F) + 1;
+
+            auto mask = (1 << width) - 1;
+
+            auto res = (loReg(nReg) >> lsbit) & mask;
+
+            // sign extend
+            if(res & (1 << (width - 1)))
+                res |= ~mask;
+
+            loReg(dstReg) = res;
+            
+            return pcSCycles * 2;
+        }
         case 0xB: // BFI/BFC
         {
             int msb = (opcode & 0x1F);
@@ -2935,6 +2952,49 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
                 loReg(dstReg) = (loReg(dstReg) & ~(mask << lsb)) | loReg(nReg) << lsb;
 
             return pcSCycles * 2;
+        }
+        case 0xC: // USAT
+        case 0xD: // USAT/USAT16
+        {
+            auto imm = ((opcode >> 6) & 3) | ((opcode >> 10) & 0x1C);
+            auto satTo = (opcode & 0x1F);
+
+            if(op == 0xD && imm == 0) // USAT16
+            {}
+            else // USAT
+            {
+                auto val = static_cast<int32_t>(reg(nReg));
+
+                if(op == 0xC) // LSL
+                    val <<= imm;
+                else // ASR
+                {
+                    assert(imm);
+                    val = val >> imm;
+                }
+
+                bool sat = false;
+
+                auto max = (1 << satTo) - 1;
+
+                if(val > max)
+                {
+                    val = max;
+                    sat = true;
+                }
+                else if(val < 0)
+                {
+                    val = 0;
+                    sat = true;
+                }
+
+                loReg(dstReg) = val;
+
+                cpsr = (cpsr & ~Flag_Q) | (sat ? Flag_Q : 0);
+
+                return pcSCycles * 2;
+            }
+            break;
         }
         case 0xE: // UBFX
         {
