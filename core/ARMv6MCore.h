@@ -103,49 +103,49 @@ private:
     void writeMem32(uint32_t addr, uint32_t data);
 
     inline bool inIT() {return itState & 0xF;}
-    int checkIT(uint16_t opcode);
+    bool checkIT(uint16_t opcode);
     void advanceIT();
 
-    int executeTHUMBInstruction();
+    void executeTHUMBInstruction();
 
-    int doTHUMB01MoveShifted(uint16_t opcode, uint32_t pc);
-    int doTHUMB0102(uint16_t opcode, uint32_t pc);
-    int doTHUMB03(uint16_t opcode, uint32_t pc);
-    int doTHUMB040506(uint16_t opcode, uint32_t pc);
-    int doTHUMB04ALU(uint16_t opcode, uint32_t pc);
-    int doTHUMB05HiReg(uint16_t opcode, uint32_t pc);
-    int doTHUMB06PCRelLoad(uint16_t opcode, uint32_t pc);
-    int doTHUMB0708(uint16_t opcode, uint32_t pc);
-    int doTHUMB09LoadStoreWord(uint16_t opcode, uint32_t pc);
-    int doTHUMB09LoadStoreByte(uint16_t opcode, uint32_t pc);
-    int doTHUMB10LoadStoreHalf(uint16_t opcode, uint32_t pc);
-    int doTHUMB11SPRelLoadStore(uint16_t opcode, uint32_t pc);
-    int doTHUMB12LoadAddr(uint16_t opcode, uint32_t pc);
-    int doTHUMBMisc(uint16_t opcode, uint32_t pc);
-    int doTHUMB13SPOffset(uint16_t opcode, uint32_t pc);
-    int doTHUMB14PushPop(uint16_t opcode, uint32_t pc);
-    int doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc);
-    int doTHUMB1617(uint16_t opcode, uint32_t pc);
-    int doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc);
+    void doTHUMB01MoveShifted(uint16_t opcode, uint32_t pc);
+    void doTHUMB0102(uint16_t opcode, uint32_t pc);
+    void doTHUMB03(uint16_t opcode, uint32_t pc);
+    void doTHUMB040506(uint16_t opcode, uint32_t pc);
+    void doTHUMB04ALU(uint16_t opcode, uint32_t pc);
+    void doTHUMB05HiReg(uint16_t opcode, uint32_t pc);
+    void doTHUMB06PCRelLoad(uint16_t opcode, uint32_t pc);
+    void doTHUMB0708(uint16_t opcode, uint32_t pc);
+    void doTHUMB09LoadStoreWord(uint16_t opcode, uint32_t pc);
+    void doTHUMB09LoadStoreByte(uint16_t opcode, uint32_t pc);
+    void doTHUMB10LoadStoreHalf(uint16_t opcode, uint32_t pc);
+    void doTHUMB11SPRelLoadStore(uint16_t opcode, uint32_t pc);
+    void doTHUMB12LoadAddr(uint16_t opcode, uint32_t pc);
+    void doTHUMBMisc(uint16_t opcode, uint32_t pc);
+    void doTHUMB13SPOffset(uint16_t opcode, uint32_t pc);
+    void doTHUMB14PushPop(uint16_t opcode, uint32_t pc);
+    void doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc);
+    void doTHUMB1617(uint16_t opcode, uint32_t pc);
+    void doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc);
 
     uint32_t getShiftedReg(uint32_t opcode, bool &carry);
-    int doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool carry, bool setFlags);
+    void doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool carry, bool setFlags);
 
-    int doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc);
-    int doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitDataProcessingModifiedImm(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc);
-    int doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc);
+    void doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitDataProcessingModifiedImm(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc);
+    void doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc);
 
     void updateTHUMBPC(uint32_t pc);
 

@@ -158,7 +158,7 @@ void ARMv6MCore::writeMem32(uint32_t addr, uint32_t data)
     mem.write<uint32_t>(addr, data);
 }
 
-int ARMv6MCore::checkIT(uint16_t opcode)
+bool ARMv6MCore::checkIT(uint16_t opcode)
 {
     auto cond = itState >> 4;
 
@@ -209,12 +209,10 @@ int ARMv6MCore::checkIT(uint16_t opcode)
             auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
             assert(mem.verifyPointer(thumbPCPtr, pc));
             fetchOp = *thumbPCPtr;
-
-            return pcSCycles * 2;
         }
-        return pcSCycles;
+        return true;
     }
-    return 0;
+    return false;
 }
 
 void ARMv6MCore::advanceIT()
@@ -225,7 +223,7 @@ void ARMv6MCore::advanceIT()
         itState = (itState & 0xE0) | ((itState << 1) & 0x1F);
 }
 
-int ARMv6MCore::executeTHUMBInstruction()
+void ARMv6MCore::executeTHUMBInstruction()
 {
     auto &pc = loReg(Reg::PC); // not a low reg, but not banked
     uint16_t opcode = decodeOp;
@@ -237,12 +235,8 @@ int ARMv6MCore::executeTHUMBInstruction()
     assert(mem.verifyPointer(thumbPCPtr, pc));
     fetchOp = *thumbPCPtr;
 
-    if(inIT())
-    {
-        int c = checkIT(opcode);
-        if(c)
-            return c;
-    }
+    if(inIT() && checkIT(opcode))
+        return;
 
     switch(opcode >> 12)
     {
@@ -282,7 +276,7 @@ int ARMv6MCore::executeTHUMBInstruction()
     __builtin_unreachable();
 }
 
-int ARMv6MCore::doTHUMB01MoveShifted(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB01MoveShifted(uint16_t opcode, uint32_t pc)
 {
     auto instOp = (opcode >> 11) & 0x1;
     auto srcReg = static_cast<Reg>((opcode >> 3) & 7);
@@ -325,11 +319,9 @@ int ARMv6MCore::doTHUMB01MoveShifted(uint16_t opcode, uint32_t pc)
              | (res == 0 ? Flag_Z : 0)
              | carry;
     }
-
-    return pcSCycles;
 }
 
-int ARMv6MCore::doTHUMB0102(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB0102(uint16_t opcode, uint32_t pc)
 {
     auto instOp = (opcode >> 11) & 0x3;
     auto srcReg = static_cast<Reg>((opcode >> 3) & 7);
@@ -401,11 +393,9 @@ int ARMv6MCore::doTHUMB0102(uint16_t opcode, uint32_t pc)
                  | carry;
         }
     }
-
-    return pcSCycles;
 }
 
-int ARMv6MCore::doTHUMB03(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB03(uint16_t opcode, uint32_t pc)
 {
     auto instOp = (opcode >> 11) & 0x3;
     auto dstReg = static_cast<Reg>((opcode >> 8) & 7);
@@ -446,11 +436,9 @@ int ARMv6MCore::doTHUMB03(uint16_t opcode, uint32_t pc)
         default:
             __builtin_unreachable();
     }
-
-    return pcSCycles;
 }
 
-int ARMv6MCore::doTHUMB040506(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB040506(uint16_t opcode, uint32_t pc)
 {
     if(opcode & (1 << 11)) // format 6, PC-relative load
         return doTHUMB06PCRelLoad(opcode, pc);
@@ -460,7 +448,7 @@ int ARMv6MCore::doTHUMB040506(uint16_t opcode, uint32_t pc)
         return doTHUMB04ALU(opcode, pc);
 }
 
-int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
 {
     auto instOp = (opcode >> 6) & 0xF;
     auto srcReg = static_cast<Reg>((opcode >> 3) & 7);
@@ -579,7 +567,7 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
 
             if(!inIT())
                 cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
-            return pcSCycles + 1;
+            break;
         }
         case 0x8: // TST
             res = op1 & op2;
@@ -631,11 +619,9 @@ int ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
                 cpsr = (cpsr & ~(Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0);
             break;
     }
-
-    return pcSCycles;
 }
 
-int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
 {
     auto op = (opcode >> 8) & 3;
     bool h1 = opcode & (1 << 7);
@@ -650,10 +636,7 @@ int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
     {
         case 0: // ADD
             if(dstReg == Reg::PC)
-            {
                 updateTHUMBPC((loReg(Reg::PC) + src) & ~1);
-                return pcSCycles * 2 + pcNCycles;
-            }
             else
                 reg(dstReg) += src;
 
@@ -675,10 +658,7 @@ int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
         case 2: // MOV
         {
             if(dstReg == Reg::PC)
-            {
                 updateTHUMBPC(src & ~1);
-                return pcSCycles * 2 + pcNCycles;
-            }
             else
                 reg(dstReg) = src;
 
@@ -690,36 +670,30 @@ int ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
                 loReg(Reg::LR) = (pc - 2) | 1; 
 
             assert(src & 1);
-            int cycles = pcSCycles * 2 + pcNCycles;
 
             if(src >> 28 == 0xF)
             {} // shouldn't happen, no exception handling
             else
                 updateTHUMBPC(src & ~1);
 
-            return cycles;
+            return;
         }
 
         default:
             assert(!"Invalid format 5 op!");
     }
-
-    return pcSCycles;
 }
 
-int ARMv6MCore::doTHUMB06PCRelLoad(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB06PCRelLoad(uint16_t opcode, uint32_t pc)
 {
     auto dstReg = static_cast<Reg>((opcode >> 8) & 7);
     uint8_t word = opcode & 0xFF;
 
     // pc + 4, bit 1 forced to 0
-    int cycles = 0;
     loReg(dstReg) = readMem32((pc & ~2) + (word << 2));
-
-    return cycles + pcSCycles;
 }
 
-int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
 {
     auto offReg = static_cast<Reg>((opcode >> 6) & 7);
     auto baseReg = static_cast<Reg>((opcode >> 3) & 7);
@@ -736,41 +710,27 @@ int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
         {
             if(hFlag && !(addr & 1)) // LDRSH, (misaligned gets treated as a byte!)
             {
-                int cycles = 0;
                 auto val = readMem16(addr);
                 if(val & 0x8000)
                     loReg(dstReg) = val | 0xFFFF0000;
                 else
                     loReg(dstReg) = val;
-
-                return cycles + pcSCycles;
             }
             else // LDRSB
             {
-                int cycles = 0;
                 auto val = readMem8(addr);
                 if(val & 0x80)
                     loReg(dstReg) = val | 0xFFFFFF00;
                 else
                     loReg(dstReg) = val;
-
-                return cycles + pcSCycles;
             }
         }
         else
         {
             if(hFlag) // LDRH
-            {
-                int cycles = 0;
                 loReg(dstReg) = readMem16(addr);
-                return cycles + pcSCycles;
-            }
             else // STRH
-            {
-                int cycles = 0;
                 writeMem16(addr, loReg(dstReg));
-                return cycles + pcNCycles;
-            }
         }
     }
     else // format 7, load/store with reg offset
@@ -780,28 +740,22 @@ int ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
 
         if(isLoad)
         {
-            int cycles = 0;
             if(isByte) // LDRB
                 loReg(dstReg) = readMem8(addr);
             else // LDR
                 loReg(dstReg) = readMem32(addr);
-
-            return cycles + pcSCycles;
         }
         else
         {
-            int cycles = 0;
             if(isByte) // STRB
                 writeMem8(addr, loReg(dstReg));
             else // STR
                 writeMem32(addr, loReg(dstReg));
-
-            return cycles + pcNCycles;
         }
     }
 }
 
-int ARMv6MCore::doTHUMB09LoadStoreWord(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB09LoadStoreWord(uint16_t opcode, uint32_t pc)
 {
     bool isLoad = opcode & (1 << 11);
     auto offset = ((opcode >> 6) & 0x1F);
@@ -810,20 +764,12 @@ int ARMv6MCore::doTHUMB09LoadStoreWord(uint16_t opcode, uint32_t pc)
 
     auto addr = loReg(baseReg) + (offset << 2);
     if(isLoad) // LDR
-    {
-        int cycles = 0;
         loReg(dstReg) = readMem32(addr);
-        return cycles + pcSCycles;
-    }
     else // STR
-    {
-        int cycles = 0;
         writeMem32(addr, loReg(dstReg));
-        return cycles + pcNCycles;
-    }
 }
 
-int ARMv6MCore::doTHUMB09LoadStoreByte(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB09LoadStoreByte(uint16_t opcode, uint32_t pc)
 {
     bool isLoad = opcode & (1 << 11);
     auto offset = ((opcode >> 6) & 0x1F);
@@ -832,20 +778,12 @@ int ARMv6MCore::doTHUMB09LoadStoreByte(uint16_t opcode, uint32_t pc)
 
     auto addr = loReg(baseReg) + offset;
     if(isLoad) // LDRB
-    {
-        int cycles = 0;
         loReg(dstReg) = readMem8(addr);
-        return cycles + pcSCycles;
-    }
     else // STRB
-    {
-        int cycles = 0;
         writeMem8(addr, loReg(dstReg));
-        return cycles + pcNCycles;
-    }
 }
 
-int ARMv6MCore::doTHUMB10LoadStoreHalf(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB10LoadStoreHalf(uint16_t opcode, uint32_t pc)
 {
     bool isLoad = opcode & (1 << 11);
     auto offset = ((opcode >> 6) & 0x1F) << 1;
@@ -854,20 +792,12 @@ int ARMv6MCore::doTHUMB10LoadStoreHalf(uint16_t opcode, uint32_t pc)
 
     auto addr = loReg(baseReg) + offset;
     if(isLoad) // LDRH
-    {
-        int cycles = 0;
         loReg(dstReg) = readMem16(addr);
-        return cycles + pcSCycles;
-    }
     else // STRH
-    {
-        int cycles = 0;
         writeMem16(addr, loReg(dstReg));
-        return cycles + pcNCycles;
-    }
 }
 
-int ARMv6MCore::doTHUMB11SPRelLoadStore(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB11SPRelLoadStore(uint16_t opcode, uint32_t pc)
 {
     bool isLoad = opcode & (1 << 11);
     auto dstReg = static_cast<Reg>((opcode >> 8) & 7);
@@ -876,20 +806,12 @@ int ARMv6MCore::doTHUMB11SPRelLoadStore(uint16_t opcode, uint32_t pc)
     auto addr = loReg(curSP) + word;
 
     if(isLoad)
-    {
-        int cycles = 0;
         loReg(dstReg) = readMem32(addr);
-        return cycles + pcSCycles;
-    }
     else
-    {
-        int cycles = 0;
         writeMem32(addr, loReg(dstReg));
-        return cycles + pcNCycles;
-    }
 }
 
-int ARMv6MCore::doTHUMB12LoadAddr(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB12LoadAddr(uint16_t opcode, uint32_t pc)
 {
     bool isSP = opcode & (1 << 11);
     auto dstReg = static_cast<Reg>((opcode >> 8) & 7);
@@ -899,11 +821,9 @@ int ARMv6MCore::doTHUMB12LoadAddr(uint16_t opcode, uint32_t pc)
         loReg(dstReg) = loReg(curSP) + word;
     else
         loReg(dstReg) = (pc & ~2) + word; // + 4, bit 1 forced to 0
-
-    return pcSCycles;
 }
 
-int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
 {
     switch((opcode >> 8) & 0xF)
     {
@@ -920,12 +840,9 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
             auto src = loReg(static_cast<Reg>(opcode & 7));
 
             if(!!src == nz)
-            {
                 updateTHUMBPC(pc + offset);
-                return pcSCycles * 2 + pcNCycles;
-            }
 
-            return pcSCycles;
+            return;
         }
 
         case 0x2:
@@ -950,7 +867,7 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
                     break;
             }
 
-            return pcSCycles;
+            return;
         }
 
         case 0x4: // PUSH
@@ -965,7 +882,7 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
             if(isPrivileged)
                 primask = (opcode & (1 << 4)) ? 1 : 0;
 
-            return pcSCycles;
+            return;
         }
 
         case 0xA:
@@ -994,7 +911,7 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
 
                     break;
             }
-            return pcSCycles;
+            return;
         }
 
         case 0xC: // POP
@@ -1004,7 +921,7 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
         case 0xE: // BKPT
             printf("BKPT @%08X\n", pc - 4);
             exit(1);
-            return pcSCycles;
+            return;
 
         case 0xF:
         {
@@ -1015,17 +932,17 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
             {
                 itState = opcode & 0xFF;
                 itStart = true;
-                return pcSCycles;
+                return;
             }
             else // hints
             {
                 switch(opA)
                 {
                     case 0: // NOP
-                        return pcSCycles;
+                        return;
 
                     case 1: // YIELD
-                        return pcSCycles;
+                        return;
 
                     case 2: // WFE
                         if(eventFlag)
@@ -1033,11 +950,11 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
                         else
                             sleeping = true;
 
-                        return pcSCycles * 2;
+                        return;
                     
                     case 3: // WFI
                         // TODO: a bit different
-                        return pcSCycles * 2;
+                        return;
                 }
             }
         }
@@ -1047,7 +964,7 @@ int ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
     exit(1);
 }
 
-int ARMv6MCore::doTHUMB13SPOffset(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB13SPOffset(uint16_t opcode, uint32_t pc)
 {
     bool isNeg = opcode & (1 << 7);
     int off = (opcode & 0x7F) << 2;
@@ -1056,11 +973,9 @@ int ARMv6MCore::doTHUMB13SPOffset(uint16_t opcode, uint32_t pc)
         loReg(curSP) -= off;
     else
         loReg(curSP) += off;
-
-    return pcSCycles;
 }
 
-int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
 {
     // timings here are probably off
 
@@ -1105,8 +1020,6 @@ int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
 
             cycles += loadCycles; // TODO
         }
-
-        return cycles + pcSCycles;
     }
     else // PUSH
     {
@@ -1131,12 +1044,10 @@ int ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
             *ptr++ = loReg(Reg::LR);
             cycles += storeCycles;
         }
-
-        return cycles +  pcNCycles;
     }
 }
 
-int ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
 {
     bool isLoad = opcode & (1 << 11);
     auto baseReg = static_cast<Reg>((opcode >> 8) & 7);
@@ -1156,7 +1067,7 @@ int ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
 
         reg(baseReg) = addr + 0x40;
 
-        return cycles;
+        return;
     }
 
     auto endAddr = addr;
@@ -1202,11 +1113,9 @@ int ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
         cycles += pcSCycles;
     else
         cycles += pcNCycles;
-
-    return cycles;
 }
 
-int ARMv6MCore::doTHUMB1617(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB1617(uint16_t opcode, uint32_t pc)
 {
     // format 16, conditional branch (+ SWI)
     auto cond = (opcode >> 8) & 0xF;
@@ -1278,14 +1187,12 @@ int ARMv6MCore::doTHUMB1617(uint16_t opcode, uint32_t pc)
     }
 
     if(!condVal)
-        return pcSCycles; // no extra cycles if branch not taken
+        return;
     
     updateTHUMBPC(pc + offset * 2);
-
-    return pcSCycles * 2 + pcNCycles;
 }
 
-int ARMv6MCore::doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc)
 {
     if(opcode & (1 << 11))
         return doTHUMB32BitInstruction(opcode, pc);
@@ -1293,8 +1200,6 @@ int ARMv6MCore::doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc)
     uint32_t offset = static_cast<int16_t>(opcode << 5) >> 4; // sign extend and * 2
 
     updateTHUMBPC(pc + offset);
-
-    return pcSCycles * 2 + pcNCycles; // 2S + 1N
 }
 
 uint32_t ARMv6MCore::getShiftedReg(uint32_t opcode, bool &carry)
@@ -1369,7 +1274,7 @@ uint32_t ARMv6MCore::getShiftedReg(uint32_t opcode, bool &carry)
     return ret;
 }
 
-int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool carry, bool setFlags)
+void ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool carry, bool setFlags)
 {
     switch(op)
     {
@@ -1389,7 +1294,7 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
                     | (res == 0 ? Flag_Z : 0)
                     | (carry ? Flag_C : 0);
             }
-            return pcSCycles * 2;
+            return;
         }
 
         case 0x1: // BIC
@@ -1404,7 +1309,7 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
                      | (res == 0 ? Flag_Z : 0)
                      | (carry ? Flag_C : 0);
             }
-            return pcSCycles * 2;
+            return;
         }
 
         case 0x2:
@@ -1435,7 +1340,7 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
                 }
             }
 
-            return pcSCycles * 2;
+            return;
         }
 
         case 0x3:
@@ -1455,7 +1360,7 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
                     | (res == 0 ? Flag_Z : 0)
                     | (carry ? Flag_C : 0);
             }
-            return pcSCycles * 2;
+            return;
         }
 
         case 0x4:
@@ -1474,7 +1379,7 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
                     | (res == 0 ? Flag_Z : 0)
                     | (carry ? Flag_C : 0);
             }
-            return pcSCycles * 2;
+            return;
         }
 
         // 6: PKH* (reg)
@@ -1496,7 +1401,7 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
             else // CMN
                 assert(setFlags);
 
-            return pcSCycles * 2;
+            return;
         }
 
         case 0xA: // ADC
@@ -1512,7 +1417,7 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
             if(setFlags)
                 cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | (carry ? Flag_C : 0) | (overflow >> 3);
             
-            return pcSCycles * 2;
+            return;
         }
 
         case 0xB: // SBC
@@ -1527,7 +1432,7 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
             if(setFlags)
                 cpsr = (cpsr & 0x0FFFFFFF) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry | (overflow >> 3);
             
-            return pcSCycles * 2;
+            return;
         }
 
         case 0xD: // SUB/CMP
@@ -1547,7 +1452,7 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
             else // CMP
                 assert(setFlags);
     
-            return pcSCycles * 2;
+            return;
         }
 
         case 0xE: // RSB
@@ -1562,7 +1467,7 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
                 cpsr = (cpsr & ~(Flag_N | Flag_Z | Flag_C | Flag_V)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | (carry ? Flag_C : 0) | (overflow >> 3);
             }
 
-            return pcSCycles * 2;
+            return;
         }
     }
 
@@ -1570,7 +1475,7 @@ int ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool 
     exit(1);
 }
 
-int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
 {
     // fetch second half
     uint32_t opcode32 = opcode << 16 | decodeOp;
@@ -1633,7 +1538,7 @@ int ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
     __builtin_unreachable();
 }
 
-int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
 {
     auto op = (opcode >> 23) & 3;
     bool writeback = opcode & (1 << 21);   
@@ -1642,8 +1547,6 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
     uint16_t regList = opcode & 0xFFFF;
 
     auto addr = loReg(baseReg);
-
-    int cycles = pcSCycles * 2;
 
     bool baseInList = regList & (1 << static_cast<int>(baseReg));
 
@@ -1670,7 +1573,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
             if(writeback && !baseInList)
                 loReg(baseReg) = addr;
 
-            return cycles;
+            return;
         }
         else if(op == 2) // DB
         {
@@ -1699,7 +1602,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
             if(writeback && !baseInList)
                 loReg(baseReg) = endAddr;
 
-            return cycles;
+            return;
         }
     }
     else // STM
@@ -1722,7 +1625,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
             if(writeback)
                 loReg(baseReg) = addr;
 
-            return cycles;
+            return;
         }
         else if(op == 2) // DB
         {
@@ -1747,7 +1650,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
             if(writeback)
                 loReg(baseReg) = endAddr;
 
-            return cycles;
+            return;
         }
     }
 
@@ -1755,14 +1658,13 @@ int ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 23) & 3;
     auto op2 = (opcode >> 20) & 3;
     auto op3 = (opcode >> 4) & 0xF;
 
     auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
-
 
     if(op1 == 1 && op2 == 1)
     {
@@ -1777,7 +1679,6 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
             if(baseReg == Reg::PC)
                 addr -= 2;
 
-            int cycles = pcSCycles * 3 + pcNCycles;
             int offset;
             if(op3 & 1) // TBH
                 offset = readMem16(addr + loReg(indexReg) * 2);
@@ -1786,7 +1687,7 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
 
             updateTHUMBPC((pc - 2) + offset * 2);
 
-            return cycles;
+            return;
         }
 
     }
@@ -1803,15 +1704,13 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
         uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
         uint32_t addr = index ? offsetAddr : loReg(baseReg);
 
-        int cycles = pcSCycles * 2;
-
         writeMem32(addr, loReg(dstReg));
         writeMem32(addr + 4, loReg(dstReg2));
 
         if(writeback)
             loReg(baseReg) = offsetAddr;
 
-        return cycles;
+        return;
     }
     else if(((op1 & 2) || (op2 & 2)) && (op2 & 1)) // LDRD (immediate)
     {
@@ -1826,22 +1725,20 @@ int ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
         uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
         uint32_t addr = index ? offsetAddr : loReg(baseReg);
 
-        int cycles = pcSCycles * 2;
-
         loReg(dstReg) = readMem32(addr);
         loReg(dstReg2) = readMem32(addr + 4);
 
         if(writeback)
             loReg(baseReg) = offsetAddr;
 
-        return cycles;
+        return;
     }
 
     printf("Unhandled load/store dual/exclusive opcode %08X (%X %X %X) @%08X\n", opcode, op1, op2, op3, pc - 6);
     exit(1);
 }
 
-int ARMv6MCore::doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t pc)
 {
     auto op = (opcode >> 21) & 0xF;
     bool setFlags = opcode & (1 << 20);
@@ -1857,13 +1754,11 @@ int ARMv6MCore::doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t p
     return doDataProcessing(op, nReg, val, dstReg, carry, setFlags);
 }
 
-int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
 {
     bool op = opcode & (1 << 4);
     auto coproc = (opcode >> 8) & 0xF;
     auto op1 = (opcode >> 20) & 0x3F;
-
-    int cycles = pcSCycles * 2;
 
     if(coproc != 0xA && coproc != 0xB) // VFP
     {
@@ -1919,7 +1814,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                 auto n = getVReg(16, 7, false);
 
                 fpRegs[n] = loReg(tReg);
-                return cycles;
+                return;
             }
         }
         else if((op1 & 0x31) == 0x21) // move from coprocessor
@@ -1937,7 +1832,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                 else
                     loReg(tReg) = fpscr;
 
-                return cycles;
+                return;
             }
             else if(a == 0) // VMOV
             {
@@ -1947,7 +1842,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                 auto n = getVReg(16, 7, false);
 
                 loReg(tReg) = fpRegs[n];
-                return cycles;
+                return;
             }
         }
         else if((op1 & 0x3E) == 4)
@@ -1974,7 +1869,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                     fpRegs[m * 2 + 1] = loReg(t2Reg);
                 }
 
-                return cycles;
+                return;
             }
             else // two regs <-> two s regs
             {}
@@ -2024,7 +1919,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                     else
                         sReg(d) = sReg(condVal ? n : m);
                     
-                    return cycles;
+                    return;
                 }
                 else if((opc1 & 0b1011) == 0b1011)
                 {
@@ -2060,7 +1955,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                                 sReg(d) = floorf(sReg(m));
                         }
 
-                        return cycles;
+                        return;
                     }
                 }
             }
@@ -2089,7 +1984,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                                 sReg(d) = sReg(n) * sReg(m);
                         }
 
-                        return cycles;
+                        return;
                     }
                     case 0b0011:
                     {
@@ -2112,7 +2007,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                                 sReg(d) = sReg(n) + sReg(m);
                         }
 
-                        return cycles;
+                        return;
                     }
 
                     case 0b1000: // VDIV
@@ -2127,7 +2022,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                         else
                             sReg(d) = sReg(n) / sReg(m);
 
-                        return cycles;
+                        return;
                     }
 
                     case 0b1001: // VFNMA/VFNMS
@@ -2154,7 +2049,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
 
                             sReg(d) = -sReg(d) + op1 * sReg(m);
                         }
-                        return cycles;
+                        return;
                     }
 
                     case 0b1010: // VFMA/VFMS
@@ -2181,7 +2076,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
 
                             sReg(d) = sReg(d) + op1 * sReg(m);
                         }
-                        return cycles;
+                        return;
                     }
                     case 0b1011:
                     {
@@ -2202,7 +2097,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                                 uint32_t imm32 = expandImm(imm, 32);
                                 fpRegs[d] = imm32;
                             }
-                            return cycles;
+                            return;
                         }
                         else if(opc2 == 0)
                         {
@@ -2224,7 +2119,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                                     sReg(d) = fabsf(sReg(m));
                             }
 
-                            return cycles;
+                            return;
                         }
                         else if(opc2 == 1)
                         {
@@ -2245,7 +2140,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                                 else
                                     sReg(d) = sqrtf(sReg(m));
                             }
-                            return cycles;
+                            return;
                         }
                         else if(opc2 == 4 || opc2 == 5) // VCMP(E)
                         {
@@ -2273,7 +2168,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                                 else
                                     fpscr = (fpscr & 0x0FFFFFFF) | Flag_C;
 
-                                return cycles;
+                                return;
                             }
                             else
                             {
@@ -2294,7 +2189,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                                 else
                                     fpscr = (fpscr & 0x0FFFFFFF) | Flag_C;
 
-                                return cycles;
+                                return;
                             }
                         }
                         else if(opc2 == 7 && opc3 == 3) // VCVT (single <-> double)
@@ -2307,7 +2202,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                             else // S -> D
                                 dReg(d) = sReg(m);
 
-                            return cycles;
+                            return;
                         }
                         else if(opc2 == 8) // VCVT (int -> fp)
                         {
@@ -2333,7 +2228,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                                     sReg(d) = static_cast<int32_t>(fpRegs[m]);
                             }
 
-                            return cycles;
+                            return;
                         }
                         else if((opc2 & 0xA) == 0xA) // VCVT (fixed <-> float)
                         {
@@ -2373,7 +2268,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                                     fpRegs[d] = fixed;
                                 }
 
-                                return cycles;
+                                return;
                             }
                             else
                             {
@@ -2402,7 +2297,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                                     sReg(d) = f;
                                 }
 
-                                return cycles;
+                                return;
                             }
                         }
                         else if(opc2 == 0xC || opc2 == 0xD) // VCVT (fp -> int)
@@ -2428,7 +2323,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                                     fpRegs[d] = static_cast<int32_t>(sReg(m));
                             }
 
-                            return cycles;
+                            return;
                         }
                         break;
                     }
@@ -2505,7 +2400,7 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
             }
         }
 
-        return cycles;
+        return;
     }
     else if((op1 & 0x21) == 0) // store coprocessor
     {
@@ -2560,14 +2455,14 @@ int ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
             }
         }
 
-        return cycles;
+        return;
     }
 
     printf("Unhandled coprocessor opcode %08X (%X %X %X) @%08X\n", opcode, op, coproc, op1, pc - 6);
     exit(1);
 }
 
-int ARMv6MCore::doTHUMB32BitDataProcessingModifiedImm(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitDataProcessingModifiedImm(uint32_t opcode, uint32_t pc)
 {
     auto op = (opcode >> 21) & 0xF;
     bool setFlags = opcode & (1 << 20);
@@ -2613,7 +2508,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingModifiedImm(uint32_t opcode, uint32_t 
     return doDataProcessing(op, nReg, val, dstReg, carry, setFlags);
 }
 
-int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
 {
     auto op = (opcode >> 21) & 0xF;
 
@@ -2633,7 +2528,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
                 auto imm = ((opcode >> 15) & 0x800) | ((opcode >> 4) & 0x700) | (opcode & 0xFF);
 
                 loReg(dstReg) = loReg(nReg) + imm;
-                return pcSCycles * 2;
+                return;
             }
             break;
         }
@@ -2646,7 +2541,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
                 auto imm = ((opcode >> 15) & 0x800) | ((opcode >> 4) & 0x700) | (opcode & 0xFF);
 
                 loReg(dstReg) = loReg(nReg) - imm;
-                return pcSCycles * 2;
+                return;
             }
             break;
         }
@@ -2655,7 +2550,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
             auto imm = ((opcode >> 4) & 0xF000) |((opcode >> 15) & 0x800) | ((opcode >> 4) & 0x700) | (opcode & 0xFF);
 
             loReg(dstReg) = imm;
-            return pcSCycles * 2;
+            return;
         }
         case 0x8: // SSAT
         case 0x9: // SSAT/SSAT16
@@ -2697,7 +2592,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
 
                 cpsr = (cpsr & ~Flag_Q) | (sat ? Flag_Q : 0);
 
-                return pcSCycles * 2;
+                return;
             }
             break;
         }
@@ -2716,7 +2611,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
 
             loReg(dstReg) = res;
             
-            return pcSCycles * 2;
+            return;
         }
         case 0xB: // BFI/BFC
         {
@@ -2731,7 +2626,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
             else // BFI
                 loReg(dstReg) = (loReg(dstReg) & ~(mask << lsb)) | loReg(nReg) << lsb;
 
-            return pcSCycles * 2;
+            return;
         }
         case 0xC: // USAT
         case 0xD: // USAT/USAT16
@@ -2772,7 +2667,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
 
                 cpsr = (cpsr & ~Flag_Q) | (sat ? Flag_Q : 0);
 
-                return pcSCycles * 2;
+                return;
             }
             break;
         }
@@ -2785,7 +2680,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
 
             loReg(dstReg) = (loReg(nReg) >> lsbit) & mask;
             
-            return pcSCycles * 2;
+            return;
         }
     }
 
@@ -2793,7 +2688,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
 {
     // branch and misc control
 
@@ -2826,7 +2721,7 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
             loReg(Reg::LR) = (pc - 2) | 1; // magic switch to thumb bit...
         updateTHUMBPC((pc - 2) + offset);
 
-        return pcNCycles + pcSCycles * 3;
+        return;
     }
 
     assert((op2 & 0b100) == 0);
@@ -2895,13 +2790,9 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
         }
 
         if(condVal)
-        {
             updateTHUMBPC((pc - 2) + offset);
 
-            return pcNCycles + pcSCycles * 3;
-        }
-
-        return pcSCycles * 2;
+        return;
     }
 
     switch(op1)
@@ -2927,7 +2818,7 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
                     else if(sysm == 9)
                         loReg(Reg::PSP) = reg(srcReg) & ~3;
                 }
-                return pcSCycles * 2 + 1;
+                return;
             }
             else if((sysm >> 3) == 2)
             {
@@ -2939,7 +2830,7 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
                     else if(sysm == 0x14 && (cpsr & 0x3F) == 0)
                         control = reg(srcReg) & 3;
                 }
-                return pcSCycles * 2 + 1;
+                return;
             }
 
             break;
@@ -2952,7 +2843,7 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
             if(op == 0x4 || op == 0x5) // DSB/DMB
             {
                 //do something?
-                return pcSCycles * 2 + 1;
+                return;
             }
 
             break;
@@ -2978,7 +2869,7 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
 
                 reg(dstReg) = cpsr & mask;
 
-                return pcSCycles * 2 + 1;
+                return;
             }
             else if((sysm >> 3) == 1)
             {
@@ -2988,7 +2879,7 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
                 else if(sysm == 9)
                     reg(dstReg) = loReg(Reg::PSP);
 
-                return pcSCycles * 2 + 1;
+                return;
             }
             else if((sysm >> 3) == 2)
             {
@@ -2998,7 +2889,7 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
                 else if(sysm == 0x14)
                     reg(dstReg) = control & 3;
 
-                return pcSCycles * 2 + 1;
+                return;
             }
             break;
         }
@@ -3008,7 +2899,7 @@ int ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-int ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 21) & 7;
     auto op2 = (opcode >> 6) & 0x3F;
@@ -3022,8 +2913,6 @@ int ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
 
         uint32_t addr = loReg(baseReg) + offset;
 
-        int cycles = pcSCycles * 2;
-
         switch(op1 & 3)
         {
             case 0:
@@ -3033,8 +2922,6 @@ int ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
             case 2:
                 writeMem32(addr, loReg(dstReg)); break; // STR
         }
-
-        return cycles;
     }
     else if(op2 & 0x20) // 8 bit immediate
     {
@@ -3046,8 +2933,6 @@ int ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
 
         uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
         uint32_t addr = index ? offsetAddr : loReg(baseReg);
-
-        int cycles = pcSCycles * 2;
 
         switch(op1 & 3)
         {
@@ -3061,8 +2946,6 @@ int ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
 
         if(writeback)
             loReg(baseReg) = offsetAddr;
-
-        return cycles;
     }
     else // register
     {
@@ -3070,8 +2953,6 @@ int ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
         auto shift = (opcode >> 4) & 3;
 
         uint32_t addr = loReg(baseReg) + (loReg(mReg) << shift);
-
-        int cycles = pcSCycles * 2;
 
         switch(op1 & 3)
         {
@@ -3082,20 +2963,16 @@ int ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
             case 2:
                 writeMem32(addr, loReg(dstReg)); break; // STR
         }
-
-        return cycles;
     }
 }
 
-int ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 23) & 3;
     auto op2 = (opcode >> 6) & 0x3F;
 
     auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
     auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
-
-    int cycles = pcSCycles * 2;
 
     if(dstReg == Reg::PC) // preload
     {
@@ -3119,7 +2996,7 @@ int ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
 
         loReg(dstReg) = data;
 
-        return cycles;
+        return;
     }
     else if(!(op1 & 1) && (op2 & 0x3C) == 0x38) // LDR(S)BT
     {}
@@ -3140,7 +3017,7 @@ int ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
 
             loReg(dstReg) = data;
 
-            return cycles;
+            return;
         }
         else // +/- 8 bit imm
         {
@@ -3163,7 +3040,7 @@ int ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
 
             loReg(dstReg) = data;
 
-            return cycles;
+            return;
         }
     }
 
@@ -3171,15 +3048,13 @@ int ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-int ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 23) & 3;
     auto op2 = (opcode >> 6) & 0x3F;
 
     auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
     auto dstReg = static_cast<Reg>((opcode >> 12) & 0xF);
-
-    int cycles = pcSCycles * 2;
 
     if(dstReg == Reg::PC) // unallocated hints
     {
@@ -3203,7 +3078,7 @@ int ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
 
         loReg(dstReg) = data;
 
-        return cycles;
+        return;
     }
     else if(!(op1 & 1) && (op2 & 0x3C) == 0x38) // LDR(S)HT
     {}
@@ -3224,7 +3099,7 @@ int ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
 
             loReg(dstReg) = data;
 
-            return cycles;
+            return;
         }
         else // +/- 8 bit imm
         {
@@ -3247,7 +3122,7 @@ int ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
 
             loReg(dstReg) = data;
 
-            return cycles;
+            return;
         }
     }
 
@@ -3255,7 +3130,7 @@ int ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-int ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 23) & 3;
     auto op2 = (opcode >> 6) & 0x3F;
@@ -3265,7 +3140,6 @@ int ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
 
     assert(!(op1 & 2));
 
-    int cycles = pcSCycles * 2;
     uint32_t data;
 
     if(baseReg == Reg::PC) // LDR (literal)
@@ -3334,10 +3208,10 @@ int ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
     else
         loReg(dstReg) = data;
 
-    return cycles;
+    return;
 }
 
-int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 20) & 0xF;
     auto op2 = (opcode >> 4) & 0xF;
@@ -3375,7 +3249,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
                          | ((sum[2] >= 0x100) ? Flag_GE2 : 0)
                          | ((sum[3] >= 0x100) ? Flag_GE3 : 0);
 
-                    return pcSCycles * 2;
+                    return;
                 }
                 //1: U*ADD16
                 //2: U*ASX
@@ -3422,7 +3296,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
                 if(setFlags)
                     cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
                 
-                return pcSCycles * 2;
+                return;
             }
 
             case 1: // LSR
@@ -3452,7 +3326,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
                 if(setFlags)
                     cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
                 
-                return pcSCycles * 2;
+                return;
             }
 
             case 2: // ASR
@@ -3482,7 +3356,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
                 if(setFlags)
                     cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
                 
-                return pcSCycles * 2;
+                return;
             }
             // 3: ROR
         }
@@ -3503,7 +3377,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
             else // SXTAH
                 loReg(dReg) = loReg(nReg) + val;
 
-            return pcSCycles * 2;
+            return;
         }
         else if(op1 == 1) // UXTAH/UXTH
         {
@@ -3519,7 +3393,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
             else // UXTAH
                 loReg(dReg) = loReg(nReg) + val;
 
-            return pcSCycles * 2;
+            return;
         }
         else if(op1 == 4) // SXTAB/SXTB
         {
@@ -3535,7 +3409,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
             else // SXTAB
                 loReg(dReg) = loReg(nReg) + val;
 
-            return pcSCycles * 2;
+            return;
         }
         else if(op1 == 5) // UXTAB/UXTB
         {
@@ -3551,7 +3425,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
             else // UXTAB
                 loReg(dReg) = loReg(nReg) + val;
 
-            return pcSCycles * 2;
+            return;
         }
         else if(op1 & 0b1000) // misc ops
         {
@@ -3572,7 +3446,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
                         case 1: // REV16
                         {
                             loReg(dReg) = ((loReg(mReg) & 0xFF00FF00) >> 8) | ((loReg(mReg) & 0x00FF00FF) << 8);
-                            return pcSCycles * 2;
+                            return;
                         }
                     }
                     break;
@@ -3590,7 +3464,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
 
                     loReg(dReg) = (loReg(nReg) & nMask) | (loReg(mReg) & ~nMask);
 
-                    return pcSCycles * 2;
+                    return;
                 }
                 case 3: // CLZ
                 {
@@ -3602,7 +3476,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
 
                     loReg(dReg) = loReg(mReg) == 0 ? 32 : __builtin_clz(loReg(mReg));
 
-                    return pcSCycles * 2;
+                    return;
                 }
             }
         }
@@ -3612,7 +3486,7 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-int ARMv6MCore::doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 20) & 7;
     auto op2 = (opcode >> 4) & 3;
@@ -3633,13 +3507,13 @@ int ARMv6MCore::doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc)
             else // MLA
                 loReg(dstReg) = loReg(nReg) * loReg(mReg) + loReg(aReg);
 
-            return pcSCycles * 2;
+            return;
         }
         else if(op2 == 1) // MLS
         {
             loReg(dstReg) = loReg(aReg) - loReg(nReg) * loReg(mReg);
 
-            return pcSCycles * 2;
+            return;
         }
     }
     else if(op1 == 1)
@@ -3655,14 +3529,14 @@ int ARMv6MCore::doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc)
         else // SMLA[BT][BT]
             loReg(dstReg) = static_cast<int32_t>(op1) * static_cast<int32_t>(op2) + loReg(aReg);
 
-        return pcSCycles * 2;
+        return;
     }
 
     printf("Unhandled mul/diff opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
     exit(1);
 }
 
-int ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
+void ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 20) & 7;
     auto op2 = (opcode >> 4) & 0xF;
@@ -3682,7 +3556,7 @@ int ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
         loReg(dstLoReg) = res & 0xFFFFFFFF;
         loReg(dstHiReg) = res >> 32;
 
-        return pcSCycles * 2;
+        return;
     }
     else if(op1 == 1) // SDIV
     {
@@ -3693,7 +3567,7 @@ int ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
 
         loReg(dstHiReg) = res;
 
-        return pcSCycles * 2;
+        return;
     }
     else if(op1 == 2) // UMULL
     {
@@ -3704,7 +3578,7 @@ int ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
         loReg(dstLoReg) = res & 0xFFFFFFFF;
         loReg(dstHiReg) = res >> 32;
 
-        return pcSCycles * 2;
+        return;
     }
     else if(op1 == 3) // UDIV
     {
@@ -3715,7 +3589,7 @@ int ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
 
         loReg(dstHiReg) = res;
 
-        return pcSCycles * 2;
+        return;
     }
     else if(op1 == 6)
     {
@@ -3727,7 +3601,7 @@ int ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
             loReg(dstLoReg) = res & 0xFFFFFFFF;
             loReg(dstHiReg) = res >> 32;
 
-            return pcSCycles * 2;
+            return;
         }
     }
 
