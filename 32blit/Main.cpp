@@ -49,8 +49,8 @@ static uint32_t waveChannelData[CHANNEL_COUNT][2]; // data/callback
 const uint32_t screenPtr    = 0x30000000; // (52 bytes)
 const uint32_t paletteAddr  = 0x30000040; // (1024 bytes)
 const uint32_t savePathAddr = 0x30000440; // (1024 bytes)
-const uint32_t tmpAddr      = 0x30000840; // (1024 bytes)
-const uint32_t channelsAddr = 0x30000C40; // (1504 bytes (188 * 8))
+const uint32_t channelsAddr = 0x30000840; // (1504 bytes (188 * 8))
+const uint32_t tmpAddr      = 0x30000E40; // (1024+ bytes)
 const uint32_t fbAddr = 0x3000FC00;
 
 static bool parseBlit(blit::File &file)
