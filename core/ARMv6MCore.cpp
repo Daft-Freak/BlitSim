@@ -129,33 +129,33 @@ void ARMv6MCore::doRunCall(uint32_t addr, uint32_t r0, uint32_t r1)
 
 uint8_t ARMv6MCore::readMem8(uint32_t addr, int &cycles, bool sequential)
 {
-    return mem.read<uint8_t>(addr, cycles, sequential);
+    return mem.read<uint8_t>(addr);
 }
 
 uint16_t ARMv6MCore::readMem16(uint32_t addr, int &cycles, bool sequential)
 {
-    return mem.read<uint16_t>(addr, cycles, sequential);
+    return mem.read<uint16_t>(addr);
 }
 
 
 uint32_t ARMv6MCore::readMem32(uint32_t addr, int &cycles, bool sequential)
 {
-    return mem.read<uint32_t>(addr, cycles, sequential);
+    return mem.read<uint32_t>(addr);
 }
 
 void ARMv6MCore::writeMem8(uint32_t addr, uint8_t data, int &cycles, bool sequential)
 {
-    mem.write<uint8_t>(addr, data, cycles, sequential);
+    mem.write<uint8_t>(addr, data);
 }
 
 void ARMv6MCore::writeMem16(uint32_t addr, uint16_t data, int &cycles, bool sequential)
 {
-    mem.write<uint16_t>(addr, data, cycles, sequential);
+    mem.write<uint16_t>(addr, data);
 }
 
 void ARMv6MCore::writeMem32(uint32_t addr, uint32_t data, int &cycles, bool sequential)
 {
-    mem.write<uint32_t>(addr, data, cycles, sequential);
+    mem.write<uint32_t>(addr, data);
 }
 
 int ARMv6MCore::checkIT(uint16_t opcode)
