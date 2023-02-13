@@ -162,7 +162,6 @@ private:
     Reg curSP = Reg::SP;
 
     const uint8_t *pcPtr = nullptr;
-    int pcSCycles = 0, pcNCycles = 0;
 
     // pipeline
     uint32_t fetchOp = 0, decodeOp = 0;

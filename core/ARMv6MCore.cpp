@@ -1055,8 +1055,6 @@ void ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
 
     auto addr = loReg(baseReg);
 
-    int cycles = 0;
-
     if(!regList)
     {
         // empty list loads/stores PC... even though it isn't usually possible here
@@ -1108,11 +1106,6 @@ void ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
 
         addr += 4;
     }
-
-    if(isLoad)
-        cycles += pcSCycles;
-    else
-        cycles += pcNCycles;
 }
 
 void ARMv6MCore::doTHUMB1617(uint16_t opcode, uint32_t pc)
@@ -3637,8 +3630,6 @@ void ARMv6MCore::updateTHUMBPC(uint32_t pc)
         pcPtr = std::as_const(mem).mapAddress(pc); // force const mapAddress
         assert(pcPtr);
         pcPtr -= pc;
-        pcSCycles = 1;
-        pcNCycles = 1;
     }
 
     // refill the pipeline
