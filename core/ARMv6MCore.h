@@ -166,9 +166,6 @@ private:
     // pipeline
     uint32_t fetchOp = 0, decodeOp = 0;
 
-    // internal state
-    bool sleeping, eventFlag;
-
     uint8_t itState = 0;
     bool itStart = false;
 
