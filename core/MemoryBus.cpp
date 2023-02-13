@@ -16,6 +16,7 @@ enum MemoryRegion
     Region_D2          = 0x30,
     Region_D3_Backup   = 0x38,
     Region_QSPI        = 0x90,
+    Region_QSPI2       = 0x91, // bigger than 16MB
 };
 
 template uint8_t MemoryBus::read(uint32_t addr, int &cycles, bool sequential);
@@ -124,6 +125,7 @@ T MemoryBus::read(uint32_t addr, int &cycles, bool sequential)
             return doD3BackupRead<T>(addr);
 
         case Region_QSPI:
+        case Region_QSPI2:
             accessCycles(1);
             return doRead<T>(qspiFlash, addr);
     }
@@ -172,6 +174,7 @@ void MemoryBus::write(uint32_t addr, T data, int &cycles, bool sequential)
             return;
 
         case Region_QSPI:
+        case Region_QSPI2:
             accessCycles(1);
             doWrite<T>(qspiFlash, addr, data);
             return;
@@ -201,6 +204,7 @@ const uint8_t *MemoryBus::mapAddress(uint32_t addr) const
         //    return d3RAM + (addr & 0);
 
         case Region_QSPI:
+        case Region_QSPI2:
             return qspiFlash + (addr & 0x1FFFFFF);
     }
 
@@ -232,6 +236,7 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
         //    return d3RAM + (addr & 0);
 
         case Region_QSPI:
+        case Region_QSPI2:
             return qspiFlash + (addr & 0x1FFFFFF);
     }
 
