@@ -393,6 +393,40 @@ void apiCallback(int index, uint32_t *regs)
             api.send_message(mem.mapAddress(regs[0]), regs[1]);
             break;
 
+        case 31: // flash_to_tmp
+        {
+            auto filename = getStringData(regs[0]);
+            auto sizePtr = regs[1];
+
+            regs[0] = 0;
+            unsigned int tmpSize = 4 * 1024 * 1024;
+            uint32_t tmpAddr = 0x90000000 + (32 * 1024 * 1024) - tmpSize;
+
+            File f{std::string(filename)};
+            auto fileLen = f.get_length();
+
+            if(fileLen <= tmpSize && !fileInTemp)
+            {
+                f.read(0, fileLen, reinterpret_cast<char *>(mem.mapAddress(tmpAddr)));
+
+                int c;
+                mem.write<uint32_t>(sizePtr, fileLen, c, false);
+
+                regs[0] = tmpAddr;
+                fileInTemp = true;
+            }
+            else
+                regs[0] = 0;
+
+            break;
+        }
+
+        case 32: // tmp_file_closed
+        {
+            fileInTemp = false;
+            break;
+        }
+
         case 33: // get_metadata
         {
             auto ptr = regs[0];
