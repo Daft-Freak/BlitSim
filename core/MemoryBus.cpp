@@ -7,22 +7,6 @@
 #include "32blitAPI.h"
 #include "ARMv6MCore.h"
 
-bool updateReg(uint32_t &curVal, uint32_t newVal, int atomic)
-{
-    auto oldVal = curVal;
-
-    if(atomic == 0)
-        curVal = newVal;
-    else if(atomic == 1)
-        curVal ^= newVal;
-    else if(atomic == 2)
-        curVal |= newVal;
-    else
-        curVal &= ~newVal;
-
-    return curVal != oldVal;
-}
-
 enum MemoryRegion
 {
     Region_ITCM        = 0x00,
