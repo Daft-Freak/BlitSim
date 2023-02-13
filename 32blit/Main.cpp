@@ -331,6 +331,32 @@ void apiCallback(int index, uint32_t *regs)
             regs[0] = api.get_max_us_timer();
             break;
 
+        case 22: // decode_jpeg_buffer
+        {
+            auto retPtr = regs[0];
+            auto ptr = mem.mapAddress(regs[1]);
+            auto len = regs[2];
+            auto alloc = regs[3];
+
+            auto ret = decode_jpeg_buffer(ptr, len);
+
+            // run alloc callback
+            cpuCore.runCallLocked(alloc, ret.size.area() * 3);
+
+            // copy data
+            auto outPtr = mem.mapAddress(regs[0]);
+            memcpy(outPtr, ret.data, ret.size.area() * 3);
+            delete[] ret.data;
+
+            int c;
+            mem.write<uint32_t>(retPtr + 0, ret.size.w, c, false); // size.w
+            mem.write<uint32_t>(retPtr + 4, ret.size.h, c, false); // size.h
+            mem.write<uint32_t>(retPtr + 8, regs[0], c, false); // data
+            break;
+        }
+
+        // 23 is decode_jpeg_file, but I don't think anything uses that?
+
         case 24: // launch
         {
             launchFile = reinterpret_cast<char *>(mem.mapAddress(regs[0]));
