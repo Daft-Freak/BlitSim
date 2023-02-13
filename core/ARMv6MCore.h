@@ -21,6 +21,7 @@ public:
 
     void runCall(uint32_t addr, uint32_t r0 = 0);
     void runCallThread(uint32_t addr, uint32_t r0 = 0);
+    void runCallLocked(uint32_t addr, uint32_t r0 = 0);
 
     void setPendingIRQ(int n);
     void setEvent();

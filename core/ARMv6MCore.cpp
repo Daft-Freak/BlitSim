@@ -165,6 +165,11 @@ void ARMv6MCore::runCallThread(uint32_t addr, uint32_t r0)
     execMutex.unlock();
 }
 
+void ARMv6MCore::runCallLocked(uint32_t addr, uint32_t r0)
+{
+    doRunCall(addr, r0);
+}
+
 void ARMv6MCore::setPendingIRQ(int n)
 {
     exceptionPending |= 1ull << (n + 16);
