@@ -128,14 +128,14 @@ void ARMv6MCore::setSP(uint32_t val)
     reg(Reg::SP) = val;
 }
 
-void ARMv6MCore::runCall(uint32_t addr, uint32_t r0)
+void ARMv6MCore::runCall(uint32_t addr, uint32_t r0, uint32_t r1)
 {
     execMutex.lock();
-    doRunCall(addr, r0);
+    doRunCall(addr, r0, r1);
     execMutex.unlock();
 }
 
-void ARMv6MCore::runCallThread(uint32_t addr, uint32_t r0)
+void ARMv6MCore::runCallThread(uint32_t addr, uint32_t r0, uint32_t r1)
 {
     // fakes an interrupt (ish)
     // expected to be called from another thread
@@ -152,7 +152,7 @@ void ARMv6MCore::runCallThread(uint32_t addr, uint32_t r0)
     savedReg[5] = regs[14];
     savedReg[6] = cpsr;
 
-    doRunCall(addr, r0);
+    doRunCall(addr, r0, r1);
 
     regs[0] = savedReg[0];
     regs[1] = savedReg[1];
@@ -165,9 +165,9 @@ void ARMv6MCore::runCallThread(uint32_t addr, uint32_t r0)
     execMutex.unlock();
 }
 
-void ARMv6MCore::runCallLocked(uint32_t addr, uint32_t r0)
+void ARMv6MCore::runCallLocked(uint32_t addr, uint32_t r0, uint32_t r1)
 {
-    doRunCall(addr, r0);
+    doRunCall(addr, r0, r1);
 }
 
 void ARMv6MCore::setPendingIRQ(int n)
@@ -295,11 +295,12 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
     printf("CPUI W %08X = %08X\n", addr, data);
 }
 
-void ARMv6MCore::doRunCall(uint32_t addr, uint32_t r0)
+void ARMv6MCore::doRunCall(uint32_t addr, uint32_t r0, uint32_t r1)
 {
     // TODO: save/restore state for faked interrupts?
 
     loReg(Reg::R0) = r0;
+    loReg(Reg::R1) = r1;
 
     // fake a BL
     auto oldPC = loReg(Reg::PC);

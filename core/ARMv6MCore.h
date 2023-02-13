@@ -19,9 +19,9 @@ public:
 
     void setSP(uint32_t val);
 
-    void runCall(uint32_t addr, uint32_t r0 = 0);
-    void runCallThread(uint32_t addr, uint32_t r0 = 0);
-    void runCallLocked(uint32_t addr, uint32_t r0 = 0);
+    void runCall(uint32_t addr, uint32_t r0 = 0, uint32_t r1 = 0);
+    void runCallThread(uint32_t addr, uint32_t r0 = 0, uint32_t r1 = 0);
+    void runCallLocked(uint32_t addr, uint32_t r0 = 0, uint32_t r1 = 0);
 
     void setPendingIRQ(int n);
     void setEvent();
@@ -105,7 +105,7 @@ private:
     double dReg(int r) const {return reinterpret_cast<const double *>(fpRegs)[r];}
     double &dReg(int r) {return reinterpret_cast<double *>(fpRegs)[r];}
 
-    void doRunCall(uint32_t addr, uint32_t r0);
+    void doRunCall(uint32_t addr, uint32_t r0, uint32_t r1);
 
     uint8_t readMem8(uint32_t addr, int &cycles, bool sequential = false);
     uint16_t readMem16(uint32_t addr, int &cycles, bool sequential = false);
