@@ -45,6 +45,8 @@ static uint32_t nextFileId = 1;
 
 static uint32_t waveChannelData[CHANNEL_COUNT][2]; // data/callback
 
+static bool fileInTemp = false;
+
 // firmware ram in D2
 const uint32_t screenPtr    = 0x30000000; // (52 bytes)
 const uint32_t paletteAddr  = 0x30000040; // (1024 bytes)
