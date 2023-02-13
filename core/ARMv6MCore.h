@@ -164,7 +164,7 @@ private:
     const uint8_t *pcPtr = nullptr;
 
     // pipeline
-    uint32_t fetchOp = 0, decodeOp = 0;
+    uint16_t fetchOp = 0, decodeOp = 0;
 
     uint8_t itState = 0;
     bool itStart = false;
