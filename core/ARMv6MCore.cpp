@@ -3781,6 +3781,23 @@ int ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
 
             switch(op1 & 3)
             {
+                case 1:
+                {
+                    assert(((opcode >> 16) & 0xF) == (opcode & 0xF)); // m encoded twice
+
+                    auto dReg = static_cast<Reg>((opcode >> 8) & 0xF);
+                    auto mReg = static_cast<Reg>(opcode & 0xF);
+
+                    switch(op2 & 3)
+                    {
+                        case 1: // REV16
+                        {
+                            loReg(dReg) = ((loReg(mReg) & 0xFF00FF00) >> 8) | ((loReg(mReg) & 0x00FF00FF) << 8);
+                            return pcSCycles * 2;
+                        }
+                    }
+                    break;
+                }
                 case 2: // SEL
                 {
                     auto nReg = static_cast<Reg>((opcode >> 16) & 0xF);
