@@ -2,7 +2,6 @@
 #include <cstdint>
 #include <mutex>
 
-#include "ClockTarget.h"
 #include "MemoryBus.h"
 
 class ARMv6MCore final
@@ -14,24 +13,13 @@ public:
 
     void reset();
 
-    unsigned int run(int ms);
-    unsigned int update(uint64_t target);
-
     void setSP(uint32_t val);
 
     void runCall(uint32_t addr, uint32_t r0 = 0, uint32_t r1 = 0);
     void runCallThread(uint32_t addr, uint32_t r0 = 0, uint32_t r1 = 0);
     void runCallLocked(uint32_t addr, uint32_t r0 = 0, uint32_t r1 = 0);
 
-    void setPendingIRQ(int n);
-    void setEvent();
-
-    uint32_t readReg(uint32_t addr);
-    void writeReg(uint32_t addr, uint32_t data);
-
     MemoryBus &getMem() {return mem;}
-
-    ClockTarget &getClock() {return clock;}
 
     void setAPICallback(APICallback cb){apiCallback = cb;}
 
@@ -161,13 +149,6 @@ private:
 
     void updateTHUMBPC(uint32_t pc);
 
-    int handleException();
-    int handleExceptionReturn(uint32_t excRet);
-    int getExceptionPriority(int exception) const;
-    void checkPendingExceptions();
-
-    void updateSysTick(int sysCycles = 0);
-
     static const uint32_t signBit = 0x80000000;
 
     // registers
@@ -191,18 +172,6 @@ private:
 
     uint8_t itState = 0;
     bool itStart = false;
-
-    // exceptions
-    uint64_t exceptionPending, exceptionActive;
-    bool needException = false;
-
-    // "real" time for synchronisation/scheduling
-    ClockTarget clock;
-
-    uint32_t sysTickRegs[4]; // E010-E01C
-    uint32_t nvicEnabled, nvicPriority[8];
-    uint32_t scbRegs[10]; // ED00-ED24
-    uint32_t mpuRegs[5]; // ED90-EDA0
 
     MemoryBus &mem;
 
