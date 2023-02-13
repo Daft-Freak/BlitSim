@@ -130,44 +130,39 @@ void ARMv6MCore::setSP(uint32_t val)
 
 void ARMv6MCore::runCall(uint32_t addr, uint32_t r0)
 {
-    // TODO: save/restore state for faked interrupts?
+    execMutex.lock();
+    doRunCall(addr, r0);
+    execMutex.unlock();
+}
 
-    loReg(Reg::R0) = r0;
+void ARMv6MCore::runCallThread(uint32_t addr, uint32_t r0)
+{
+    // fakes an interrupt (ish)
+    // expected to be called from another thread
+    pauseForIntr = true;
+    execMutex.lock();
+    pauseForIntr = false;
 
-    // fake a BL
-    auto oldPC = loReg(Reg::PC);
+    uint32_t savedReg[7];
+    savedReg[0] = regs[0];
+    savedReg[1] = regs[1];
+    savedReg[2] = regs[2];
+    savedReg[3] = regs[3];
+    savedReg[4] = regs[12];
+    savedReg[5] = regs[14];
+    savedReg[6] = cpsr;
 
-    loReg(Reg::LR) = 0x8FFFFFF; // somewhere invalid in flash
-    updateTHUMBPC(addr & ~ 1);
+    doRunCall(addr, r0);
 
-    while(loReg(Reg::PC) != 0x8FFFFFE + 2)
-    {
-        uint32_t exec = 1;
-
-        if(!sleeping)
-        {
-            // CPU
-            exec = executeTHUMBInstruction();
-
-            // advance IT
-            // outside of executeTHUMBInstruction as it needs to be after executing the instruction...
-            if(inIT())
-            {
-                if(!itStart)
-                    advanceIT();
-                itStart = false;
-            }
-        }
-
-        // update systick if using cpu clock
-        uint32_t mask = (1 << 0)/*ENABLE*/ | (1 << 2)/*CLKSOURCE*/;
-        if((sysTickRegs[0]/*SYST_CSR*/ & mask) == mask)
-            updateSysTick(exec);
-    }
-
-    // restore PC (if we're running nested)
-    if(oldPC)
-        updateTHUMBPC(oldPC);
+    regs[0] = savedReg[0];
+    regs[1] = savedReg[1];
+    regs[2] = savedReg[2];
+    regs[3] = savedReg[3];
+    regs[12] = savedReg[4];
+    regs[14] = savedReg[5];
+    cpsr = savedReg[6];
+    
+    execMutex.unlock();
 }
 
 void ARMv6MCore::setPendingIRQ(int n)
@@ -293,6 +288,57 @@ void ARMv6MCore::writeReg(uint32_t addr, uint32_t data)
     }
 
     printf("CPUI W %08X = %08X\n", addr, data);
+}
+
+void ARMv6MCore::doRunCall(uint32_t addr, uint32_t r0)
+{
+    // TODO: save/restore state for faked interrupts?
+
+    loReg(Reg::R0) = r0;
+
+    // fake a BL
+    auto oldPC = loReg(Reg::PC);
+
+    loReg(Reg::LR) = 0x8FFFFFF; // somewhere invalid in flash
+    updateTHUMBPC(addr & ~ 1);
+
+    while(loReg(Reg::PC) != 0x8FFFFFE + 2)
+    {
+        uint32_t exec = 1;
+
+        if(!sleeping)
+        {
+            // CPU
+            exec = executeTHUMBInstruction();
+
+            // advance IT
+            // outside of executeTHUMBInstruction as it needs to be after executing the instruction...
+            if(inIT())
+            {
+                if(!itStart)
+                    advanceIT();
+                itStart = false;
+            }
+        }
+
+        if(pauseForIntr && !inIT())
+        {
+            execMutex.unlock();
+            while(pauseForIntr); // wait for runCallThread to get the lock
+            execMutex.lock();
+        }
+
+        // update systick if using cpu clock
+        uint32_t mask = (1 << 0)/*ENABLE*/ | (1 << 2)/*CLKSOURCE*/;
+        if((sysTickRegs[0]/*SYST_CSR*/ & mask) == mask)
+            updateSysTick(exec);
+    }
+
+    // restore PC (if we're running nested)
+    if(oldPC)
+        updateTHUMBPC(oldPC - 2);
+    else
+        loReg(Reg::PC) = 0;
 }
 
 uint8_t ARMv6MCore::readMem8(uint32_t addr, int &cycles, bool sequential)
