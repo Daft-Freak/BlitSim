@@ -27,9 +27,6 @@ void ARMv6MCore::reset()
     primask = control = 0;
     curSP = Reg::MSP;
 
-    sleeping = false;
-    eventFlag = false;
-
     itState = 0;
 
     mem.reset();
@@ -97,19 +94,16 @@ void ARMv6MCore::doRunCall(uint32_t addr, uint32_t r0, uint32_t r1)
 
     while(loReg(Reg::PC) != 0x8FFFFFE + 2)
     {
-        if(!sleeping)
-        {
-            // CPU
-            executeTHUMBInstruction();
+        // CPU
+        executeTHUMBInstruction();
 
-            // advance IT
-            // outside of executeTHUMBInstruction as it needs to be after executing the instruction...
-            if(itState)
-            {
-                if(!itStart)
-                    advanceIT();
-                itStart = false;
-            }
+        // advance IT
+        // outside of executeTHUMBInstruction as it needs to be after executing the instruction...
+        if(itState)
+        {
+            if(!itStart)
+                advanceIT();
+            itStart = false;
         }
 
         if(pauseForIntr && !inIT())
@@ -945,11 +939,6 @@ void ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
                         return;
 
                     case 2: // WFE
-                        if(eventFlag)
-                            eventFlag = false;
-                        else
-                            sleeping = true;
-
                         return;
                     
                     case 3: // WFI
