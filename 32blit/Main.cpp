@@ -116,11 +116,11 @@ static bool parseBlit(blit::File &file)
 static void waveBufferCallback(blit::AudioChannel &channel)
 {
     int ch = &channel - blit::channels;
-    auto cb = waveChannelData[ch][0];
+    auto cb = waveChannelData[ch][1];
 
     auto chAddr = channelsAddr + ch * 188;
 
-    blit::debugf("wave cb %i %x %x\n", ch, cb, chAddr);
+    cpuCore.runCallThread(cb, chAddr);
 }
 
 void apiCallback(int index, uint32_t *regs)
