@@ -43,6 +43,8 @@ static BlitGameHeader blitHeader;
 static std::map<uint32_t, void*> fileMap; // ptr size mismatch
 static uint32_t nextFileId = 1;
 
+static uint32_t waveChannelData[CHANNEL_COUNT][2]; // data/callback
+
 // firmware ram in D2
 const uint32_t screenPtr    = 0x30000000; // (52 bytes)
 const uint32_t paletteAddr  = 0x30000040; // (1024 bytes)
@@ -109,6 +111,16 @@ static bool parseBlit(blit::File &file)
     file.read(relocsEnd, length, reinterpret_cast<char *>(flashPtr));
 
     return true;
+}
+
+static void waveBufferCallback(blit::AudioChannel &channel)
+{
+    int ch = &channel - blit::channels;
+    auto cb = waveChannelData[ch][0];
+
+    auto chAddr = channelsAddr + ch * 188;
+
+    blit::debugf("wave cb %i %x %x\n", ch, cb, chAddr);
 }
 
 void apiCallback(int index, uint32_t *regs)
@@ -370,6 +382,10 @@ static uint32_t firmwareMemRead(uint32_t addr, uint32_t val, int width)
             for(int i = 0; i < width; i++)
                 val |= chanData[chOff++] << (i * 8);
         }
+        else if(chOff == 180) // user_data
+            val = waveChannelData[ch][0]; // assume 32-bit read
+        else if(chOff == 184) // wave_buffer_callback
+            val = waveChannelData[ch][1]; // assume 32-bit read
         else
             blit::debugf("audio r %08X (%i)\n", addr, width);
     }
@@ -390,6 +406,13 @@ static uint32_t firmwareMemWrite(uint32_t addr, uint32_t val, int width)
 
             for(int i = 0; i < width; i++, val >>= 8)
                 chanData[chOff++] = val;
+        }
+        else if(chOff == 180) // user_data
+            waveChannelData[ch][0] = val; // assume 32-bit write
+        else if(chOff == 184) // wave_buffer_callback
+        {
+            waveChannelData[ch][1] = val; // assume 32-bit write
+            blit::channels[ch].wave_buffer_callback = val ? waveBufferCallback : nullptr;
         }
         else
             blit::debugf("audio w %08X(ch %i off %i) = %08X (%i)\n", addr, ch, chOff, val, width);
@@ -429,6 +452,9 @@ void init()
         fileLoaded = openFile(launchPath);
     else if(blit::file_exists("launcher.blit"))
         fileLoaded = openFile("launcher.blit");
+
+    for(int i = 0; i < CHANNEL_COUNT; i++)
+        blit::channels[i].user_data = waveChannelData[i];
 }
 
 void render(uint32_t time)
