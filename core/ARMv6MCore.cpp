@@ -1472,46 +1472,47 @@ void ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
     loReg(Reg::PC) = pc;
 
     // decode
-    auto op1 = (opcode32 >> 27) & 3;
-    auto op2 = (opcode32 >> 20) & 0x7F;
+    auto op1 = opcode32 >> 27; // & 3
+    //auto op2 = (opcode32 >> 20) & 0x7F;
 
     assert(op1); // 0 should be a 16-bit instruction
 
-    if(op1 == 1)
+    // top 3 bits will always be 111
+    if(op1 == 0b11101)
     {
-        if(op2 & 0x40) // coprocessor
+        if(opcode32 & (1 << 26)) // coprocessor
             return doTHUMB32BitCoprocessor(opcode32, pc);
-        else if(op2 & 0x20) // data processing (shifted register)
+        else if(opcode32 & (1 << 25)) // data processing (shifted register)
             return doTHUMB32BitDataProcessingShiftedReg(opcode32, pc);
-        else if(op2 & 4) // load/store dual or exclusive
+        else if(opcode32 & (1 << 22)) // load/store dual or exclusive
             return doTHUMB32BitLoadStoreDualEx(opcode32, pc);
         else // load/store multiple
             return doTHUMB32BitLoadStoreMultiple(opcode32, pc);
     }
-    else if(op1 == 2)
+    else if(op1 == 0b11110)
     {
-        if(opcode32 & 0x8000)
+        if(opcode32 & (1 << 15))
             return doTHUMB32BitBranchMisc(opcode32, pc);
-        else if(op2 & 0x20) // data processing (plain binary immediate)
+        else if(opcode32 & (1 << 25)) // data processing (plain binary immediate)
             return doTHUMB32BitDataProcessingPlainImm(opcode32, pc);
         else // data processing (modified immediate)
             return doTHUMB32BitDataProcessingModifiedImm(opcode32, pc);
     }
-    else if(op1 == 3)
+    else if(op1 == 0b11111)
     {
-        if(op2 & 0x40) // coprocessor
+        if(opcode32 & (1 << 26)) // coprocessor
             return doTHUMB32BitCoprocessor(opcode32, pc);
-        else if((op2 & 0x78) == 0x38) // long multiply (accumulate), divide
+        else if((opcode32 & 0x3800000) == 0x3800000) // long multiply (accumulate), divide
             return doTHUMB32BitLongMultiplyDiv(opcode32, pc);
-        else if((op2 & 0x78) == 0x30) // multiply (accumulate), diff
+        else if((opcode32 & 0x3800000) == 0x3000000) // multiply (accumulate), diff
             return doTHUMB32BitMultiplyDiff(opcode32, pc);
-        else if(op2 & 0x20) // data processing (register)
+        else if(opcode32 & (1 << 25)) // data processing (register)
             return doTHUMB32BitDataProcessingReg(opcode32, pc);
-        else if((op2 & 7) == 5) // load word
+        else if((opcode32 & 0x700000) == 0x500000) // load word
             return doTHUMB32BitLoadWord(opcode32, pc);
-        else if((op2 & 7) == 3) // load halfword, memory hints
+        else if((opcode32 & 0x700000) == 0x300000) // load halfword, memory hints
             return doTHUMB32BitLoadHalfHint(opcode32, pc);
-        else if((op2 & 7) == 1) // load byte, memory hints
+        else if((opcode32 & 0x700000) == 0x100000) // load byte, memory hints
             return doTHUMB32BitLoadByteHint(opcode32, pc);
         else // store single data item
             return doTHUMB32BitStoreSingle(opcode32, pc);
