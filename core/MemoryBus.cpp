@@ -236,6 +236,12 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
     return nullptr;
 }
 
+void MemoryBus::setFirmwareRAMCallbacks(MemCallback readCB, MemCallback writeCB)
+{
+    fwReadCallback = readCB;
+    fwWriteCallback = writeCB;
+}
+
 template<class T, size_t size>
 T MemoryBus::doRead(const uint8_t (&mem)[size], uint32_t addr) const
 {
@@ -251,23 +257,31 @@ void MemoryBus::doWrite(uint8_t (&mem)[size], uint32_t addr, T data)
 template<class T>
 T MemoryBus::doD2Read(uint32_t addr) const
 {
-    addr &= 0x7FFFF;
+    auto offAddr = addr - 0x30000000;
 
-    if(addr < sizeof(d2RAM))
-        return *reinterpret_cast<const T *>(d2RAM + addr);
+    if(offAddr >= sizeof(d2RAM))
+        return doOpenRead<T>(addr);
 
-    return doOpenRead<T>(addr);
+    auto ret = *reinterpret_cast<const T *>(d2RAM + offAddr);
+
+    if(fwReadCallback && offAddr < 0xFC00/*framebuffer*/)
+        return fwReadCallback(addr, ret, sizeof(T));
+
+    return ret;
 }
 
 template<class T>
 void MemoryBus::doD2Write(uint32_t addr, T data)
 {
-    addr &= 0x7FFFF;
-    if(addr < sizeof(d2RAM))
-    {
-        *reinterpret_cast<T *>(d2RAM + addr) = data;
+    auto offAddr = addr - 0x30000000;
+
+    if(offAddr >= sizeof(d2RAM))
         return;
-    }
+
+    if(fwWriteCallback && offAddr < 0xFC00/*framebuffer*/)
+        data = fwWriteCallback(addr, data, sizeof(T));
+
+    *reinterpret_cast<T *>(d2RAM + offAddr) = data;
 }
 
 template<class T>

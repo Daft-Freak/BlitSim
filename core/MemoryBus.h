@@ -6,6 +6,7 @@
 class MemoryBus
 {
 public:
+    using MemCallback = uint32_t(*)(uint32_t addr, uint32_t val, int width);
     MemoryBus();
 
     void reset();
@@ -27,6 +28,8 @@ public:
         bool ret = read<T>(addr, tmp, false) == *ptr;
         return ret;
     }
+
+    void setFirmwareRAMCallbacks(MemCallback readCB, MemCallback writeCB);
 
 private:
     template<class T, size_t size>
@@ -60,4 +63,6 @@ private:
     uint8_t qspiFlash[32 * 1024 * 1024]; // @ 90000000
 
     uint32_t dummy = 0xBADADD55;
+
+    MemCallback fwReadCallback, fwWriteCallback;
 };
