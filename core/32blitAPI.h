@@ -6,6 +6,37 @@
 
 namespace blithw {
     // misc structs/enums
+    struct AudioChannel {
+        uint8_t   waveforms;
+        uint16_t  frequency;
+        uint16_t  volume;
+
+        uint16_t  attack_ms;
+        uint16_t  decay_ms;
+        uint16_t  sustain;
+        uint16_t  release_ms;
+        uint16_t  pulse_width;
+        int16_t   noise;
+
+        uint32_t  waveform_offset;
+
+        int32_t   filter_last_sample;
+        bool      filter_enable;
+        uint16_t  filter_cutoff_frequency;
+
+        uint32_t  adsr_frame;
+        uint32_t  adsr_end_frame;
+        uint32_t  adsr;
+        int32_t   adsr_step;
+        uint8_t   adsr_phase;
+
+        uint8_t   wave_buf_pos;
+        int16_t   wave_buffer[64];
+
+        uint32_t user_data;
+        uint32_t wave_buffer_callback;
+    };
+
     struct ButtonState {
         uint32_t state;
         uint32_t pressed, released;
