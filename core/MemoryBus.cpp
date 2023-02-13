@@ -19,12 +19,12 @@ enum MemoryRegion
     Region_QSPI2       = 0x91, // bigger than 16MB
 };
 
-template uint8_t MemoryBus::read(uint32_t addr, int &cycles, bool sequential);
-template uint16_t MemoryBus::read(uint32_t addr, int &cycles, bool sequential);
-template uint32_t MemoryBus::read(uint32_t addr, int &cycles, bool sequential);
-template void MemoryBus::write(uint32_t addr, uint8_t val, int &cycles, bool sequential);
-template void MemoryBus::write(uint32_t addr, uint16_t val, int &cycles, bool sequential);
-template void MemoryBus::write(uint32_t addr, uint32_t val, int &cycles, bool sequential);
+template uint8_t MemoryBus::read(uint32_t addr);
+template uint16_t MemoryBus::read(uint32_t addr);
+template uint32_t MemoryBus::read(uint32_t addr);
+template void MemoryBus::write(uint32_t addr, uint8_t val);
+template void MemoryBus::write(uint32_t addr, uint16_t val);
+template void MemoryBus::write(uint32_t addr, uint32_t val);
 
 MemoryBus::MemoryBus()
 {
@@ -91,42 +91,30 @@ void MemoryBus::reset()
 }
 
 template<class T>
-T MemoryBus::read(uint32_t addr, int &cycles, bool sequential)
+T MemoryBus::read(uint32_t addr)
 {
-    auto accessCycles = [&cycles, this](int c)
-    {
-        cycles += c;
-    };
-
     switch(addr >> 24)
     {
         case Region_ITCM:
-            accessCycles(1);
             return doRead<T>(itcm, addr);
 
         case Region_Flash:
-            accessCycles(1);
             return doRead<T>(flash, addr);
 
         case Region_DTCM:
-            accessCycles(1);
             return doRead<T>(dtcm, addr);
 
         case Region_D1:
-            accessCycles(1);
             return doRead<T>(d1RAM, addr);
 
         case Region_D2:
-            accessCycles(1);
             return doD2Read<T>(addr);
 
         case Region_D3_Backup:
-            accessCycles(1);
             return doD3BackupRead<T>(addr);
 
         case Region_QSPI:
         case Region_QSPI2:
-            accessCycles(1);
             return doRead<T>(qspiFlash, addr);
     }
 
@@ -134,48 +122,36 @@ T MemoryBus::read(uint32_t addr, int &cycles, bool sequential)
 }
 
 template<class T>
-void MemoryBus::write(uint32_t addr, T data, int &cycles, bool sequential)
+void MemoryBus::write(uint32_t addr, T data)
 {
-    auto accessCycles = [&cycles, this](int c)
-    {
-        cycles += c;
-    };
-
     switch(addr >> 24)
     {
         case Region_ITCM:
-            accessCycles(1);
             doWrite<T>(itcm, addr, data);
             return;
 
         case Region_Flash:
-            accessCycles(1);
             doWrite<T>(flash, addr, data);
             return;
 
         case Region_DTCM:
-            accessCycles(1);
             doWrite<T>(dtcm, addr, data);
             return;
 
         case Region_D1:
-            accessCycles(1);
             doWrite<T>(d1RAM, addr, data);
             return;
 
         case Region_D2:
-            accessCycles(1);
             doD2Write<T>(addr, data);
             return;
 
         case Region_D3_Backup:
-            accessCycles(1);
             doD3BackupWrite<T>(addr, data);
             return;
 
         case Region_QSPI:
         case Region_QSPI2:
-            accessCycles(1);
             doWrite<T>(qspiFlash, addr, data);
             return;
     }

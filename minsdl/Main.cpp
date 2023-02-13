@@ -96,7 +96,6 @@ static bool parseBlit(std::ifstream &file)
 
     uint32_t length = blitHeader.end - 0x90000000;
 
-    printf("%i %i\n", relocsEnd, length);
 
     // read metadata
     RawMetadata meta;
@@ -138,24 +137,23 @@ void apiCallback(int index, uint32_t *regs)
         case 0: // set_screen_mode
         {
             auto screenPtr = 0x30000000; // in D2
-            int cycles = 0;
             screenMode = regs[0];
             
-            mem.write<uint32_t>(screenPtr, 0x3000FC00, cycles, false); // .data = framebuffer
+            mem.write<uint32_t>(screenPtr, 0x3000FC00); // .data = framebuffer
 
             if(screenMode == 0) // lores
             {
-                mem.write<uint32_t>(screenPtr + 4, 160, cycles, false); // .bounds.w
-                mem.write<uint32_t>(screenPtr + 8, 120, cycles, false); // .bounds.h
+                mem.write<uint32_t>(screenPtr + 4, 160); // .bounds.w
+                mem.write<uint32_t>(screenPtr + 8, 120); // .bounds.h
             }
             else
             {
-                mem.write<uint32_t>(screenPtr + 4, 320, cycles, false); // .bounds.w
-                mem.write<uint32_t>(screenPtr + 8, 240, cycles, false); // .bounds.h
+                mem.write<uint32_t>(screenPtr + 4, 320); // .bounds.w
+                mem.write<uint32_t>(screenPtr + 8, 240); // .bounds.h
             }
 
-            mem.write<uint32_t>(screenPtr + 36, 0, cycles, false); // .format = RGB
-            mem.write<uint32_t>(screenPtr + 48, 0, cycles, false); // .palette = null
+            mem.write<uint32_t>(screenPtr + 36, 0); // .format = RGB
+            mem.write<uint32_t>(screenPtr + 48, 0); // .palette = null
 
             regs[0] = screenPtr; // return screen ptr
             break;

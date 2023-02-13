@@ -12,9 +12,9 @@ public:
     void reset();
 
     template<class T>
-    T read(uint32_t addr, int &cycles, bool sequential);
+    T read(uint32_t addr);
     template<class T>
-    void write(uint32_t addr, T data, int &cycles, bool sequential);
+    void write(uint32_t addr, T data);
 
     const uint8_t *mapAddress(uint32_t addr) const;
     uint8_t *mapAddress(uint32_t addr);
@@ -24,8 +24,7 @@ public:
     template<class T>
     bool verifyPointer(const T *ptr, uint32_t addr)
     {
-        int tmp;
-        bool ret = read<T>(addr, tmp, false) == *ptr;
+        bool ret = read<T>(addr) == *ptr;
         return ret;
     }
 

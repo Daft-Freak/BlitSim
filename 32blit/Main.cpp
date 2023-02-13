@@ -140,9 +140,8 @@ void apiCallback(int index, uint32_t *regs)
 
     auto getStringData = [](uint32_t strPtr)
     {
-        int c;
-        auto strDataPtr = mem.read<uint32_t>(strPtr, c, false);
-        auto strLen = mem.read<uint32_t>(strPtr + 4, c, false);
+        auto strDataPtr = mem.read<uint32_t>(strPtr);
+        auto strLen = mem.read<uint32_t>(strPtr + 4);
         auto strData = reinterpret_cast<const char *>(mem.mapAddress(strDataPtr));
         
         return std::string_view(strData, strLen);
@@ -152,16 +151,15 @@ void apiCallback(int index, uint32_t *regs)
     {
         case 0: // set_screen_mode
         {
-            int cycles = 0;
             set_screen_mode(static_cast<ScreenMode>(regs[0]));
             
-            mem.write<uint32_t>(screenPtr, fbAddr, cycles, false); // .data = framebuffer
+            mem.write<uint32_t>(screenPtr, fbAddr); // .data = framebuffer
 
-            mem.write<uint32_t>(screenPtr + 4, screen.bounds.w, cycles, false); // .bounds.w
-            mem.write<uint32_t>(screenPtr + 8, screen.bounds.h, cycles, false); // .bounds.h
+            mem.write<uint32_t>(screenPtr + 4, screen.bounds.w); // .bounds.w
+            mem.write<uint32_t>(screenPtr + 8, screen.bounds.h); // .bounds.h
 
-            mem.write<uint32_t>(screenPtr + 36, static_cast<int>(screen.format), cycles, false); // .format
-            mem.write<uint32_t>(screenPtr + 48, screen.palette ? paletteAddr : 0, cycles, false); // .palette
+            mem.write<uint32_t>(screenPtr + 36, static_cast<int>(screen.format)); // .format
+            mem.write<uint32_t>(screenPtr + 48, screen.palette ? paletteAddr : 0); // .palette
 
             regs[0] = screenPtr; // return screen ptr
             break;
@@ -248,8 +246,7 @@ void apiCallback(int index, uint32_t *regs)
             auto path = getStringData(regs[0]);
             auto callback = regs[1];
 
-            int c;
-            auto invoker = mem.read<uint32_t>(callback + 12, c, false);
+            auto invoker = mem.read<uint32_t>(callback + 12);
 
             /*
             struct FileInfo {
@@ -358,10 +355,9 @@ void apiCallback(int index, uint32_t *regs)
             memcpy(outPtr, ret.data, ret.size.area() * 3);
             delete[] ret.data;
 
-            int c;
-            mem.write<uint32_t>(retPtr + 0, ret.size.w, c, false); // size.w
-            mem.write<uint32_t>(retPtr + 4, ret.size.h, c, false); // size.h
-            mem.write<uint32_t>(retPtr + 8, regs[0], c, false); // data
+            mem.write<uint32_t>(retPtr + 0, ret.size.w); // size.w
+            mem.write<uint32_t>(retPtr + 4, ret.size.h); // size.h
+            mem.write<uint32_t>(retPtr + 8, regs[0]); // data
             break;
         }
 
@@ -405,12 +401,11 @@ void apiCallback(int index, uint32_t *regs)
             File f{std::string(filename)};
             auto fileLen = f.get_length();
 
-            if(fileLen <= tmpSize && !fileInTemp)
+            if (fileLen <= tmpSize && !fileInTemp)
             {
                 f.read(0, fileLen, reinterpret_cast<char *>(mem.mapAddress(tmpAddr)));
 
-                int c;
-                mem.write<uint32_t>(sizePtr, fileLen, c, false);
+                mem.write<uint32_t>(sizePtr, fileLen);
 
                 regs[0] = tmpAddr;
                 fileInTemp = true;
@@ -430,26 +425,25 @@ void apiCallback(int index, uint32_t *regs)
         case 33: // get_metadata
         {
             auto ptr = regs[0];
-            int c;
             auto metadataAddr = 0x90000000 + metadataOffset + 10/*magic/len*/;
 
-            mem.write<uint32_t>(ptr +  0, metadataAddr +  20, c, false); // title
-            mem.write<uint32_t>(ptr +  4, metadataAddr + 191, c, false); // author
-            mem.write<uint32_t>(ptr +  8, metadataAddr +  45, c, false); // description
-            mem.write<uint32_t>(ptr + 12, metadataAddr + 174, c, false); // version
+            mem.write<uint32_t>(ptr +  0, metadataAddr +  20); // title
+            mem.write<uint32_t>(ptr +  4, metadataAddr + 191); // author
+            mem.write<uint32_t>(ptr +  8, metadataAddr +  45); // description
+            mem.write<uint32_t>(ptr + 12, metadataAddr + 174); // version
 
             // extended meta
             bool hasType = memcmp(mem.mapAddress(metadataAddr + sizeof(RawMetadata)), "BLITTYPE", 8) == 0;
             if(hasType)
             {
                 auto typeMetadataAddr = metadataAddr + sizeof(RawMetadata) + 8;
-                mem.write<uint32_t>(ptr + 16, typeMetadataAddr + 17, c, false); // url
-                mem.write<uint32_t>(ptr + 20, typeMetadataAddr, c, false); // category
+                mem.write<uint32_t>(ptr + 16, typeMetadataAddr + 17); // url
+                mem.write<uint32_t>(ptr + 20, typeMetadataAddr); // category
             }
             else
             {
-                mem.write<uint32_t>(ptr + 16, 0, c, false); // url
-                mem.write<uint32_t>(ptr + 20, 0, c, false); // category
+                mem.write<uint32_t>(ptr + 16, 0); // url
+                mem.write<uint32_t>(ptr + 20, 0); // category
             }
 
             break;
