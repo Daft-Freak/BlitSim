@@ -2340,7 +2340,7 @@ void ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
     {}
     else if((op1 & 0x21) == 1) // load coprocessor
     {
-        bool t2 = opcode & (1 << 28);
+        [[maybe_unused]] bool t2 = opcode & (1 << 28);
 
         bool index = opcode & (1 << 24);
         bool add = opcode & (1 << 23);
@@ -2404,7 +2404,7 @@ void ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
     }
     else if((op1 & 0x21) == 0) // store coprocessor
     {
-        bool t2 = opcode & (1 << 28);
+        [[maybe_unused]] bool t2 = opcode & (1 << 28);
 
         bool index = opcode & (1 << 24);
         bool add = opcode & (1 << 23);
