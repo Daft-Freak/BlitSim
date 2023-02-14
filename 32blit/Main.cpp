@@ -49,6 +49,7 @@ static bool fileInTemp = false;
 
 // screen speed hacks
 static uint32_t gameScreenPtr;
+static uint32_t origPBF, origBBF;
 static blit::Surface emuScreen(nullptr, blit::PixelFormat::P, {0, 0});
 
 // firmware ram in D2
@@ -478,30 +479,40 @@ void apiCallback(int index, uint32_t *regs)
 
         case 2048: // patched screen.pbf
         {
-            auto pen = mem.read<uint32_t>(regs[0]);
-            emuScreen.alpha = mem.read<uint8_t>(gameScreenPtr + 28);
-            emuScreen.pbf(reinterpret_cast<Pen *>(&pen), &emuScreen, regs[2], regs[3]);
+            if(mem.read<uint32_t>(gameScreenPtr + 44)) // mask
+                cpuCore.runCallLocked(origPBF, regs[0], regs[1]);
+            else
+            {
+                auto pen = mem.read<uint32_t>(regs[0]);
+                emuScreen.alpha = mem.read<uint8_t>(gameScreenPtr + 28);
+                emuScreen.pbf(reinterpret_cast<Pen *>(&pen), &emuScreen, regs[2], regs[3]);
+            }
             break;
         }
         case 2049: // patched screen.bbf
         {
-            auto stack = reinterpret_cast<uint32_t *>(mem.mapAddress(regs[13]));
-            auto cnt = stack[0];
-            auto srcStep = stack[1];
+            if(mem.read<uint32_t>(gameScreenPtr + 44)) // mask
+                cpuCore.runCallLocked(origBBF, regs[0], regs[1]);
+            else
+            {
+                auto stack = reinterpret_cast<uint32_t *>(mem.mapAddress(regs[13]));
+                auto cnt = stack[0];
+                auto srcStep = stack[1];
 
-            // get src surface
-            auto srcPtr = reinterpret_cast<uint32_t *>(mem.mapAddress(regs[0]));
-            auto srcData = mem.mapAddress(srcPtr[0]);
-            Size srcBounds(srcPtr[1], srcPtr[2]);
-            auto srcFormat = static_cast<PixelFormat>(srcPtr[9]);
+                // get src surface
+                auto srcPtr = reinterpret_cast<uint32_t *>(mem.mapAddress(regs[0]));
+                auto srcData = mem.mapAddress(srcPtr[0]);
+                Size srcBounds(srcPtr[1], srcPtr[2]);
+                auto srcFormat = static_cast<PixelFormat>(srcPtr[9]);
 
-            Surface src(srcData, srcFormat, srcBounds);
+                Surface src(srcData, srcFormat, srcBounds);
 
-            if(srcFormat == PixelFormat::P)
-                src.palette = reinterpret_cast<Pen *>(mem.mapAddress(srcPtr[12]));
+                if(srcFormat == PixelFormat::P)
+                    src.palette = reinterpret_cast<Pen *>(mem.mapAddress(srcPtr[12]));
 
-            emuScreen.alpha = mem.read<uint8_t>(gameScreenPtr + 28);
-            emuScreen.bbf(&src, regs[1], &emuScreen, regs[3], cnt, srcStep);
+                emuScreen.alpha = mem.read<uint8_t>(gameScreenPtr + 28);
+                emuScreen.bbf(&src, regs[1], &emuScreen, regs[3], cnt, srcStep);
+            }
             break;
         }
 
@@ -615,6 +626,9 @@ static bool openFile(const std::string &filename)
             // TODO: need to re-patch whenever screen mode changes
             blit::debugf("patching screen at %x\n", addr);
             gameScreenPtr = addr;
+
+            origPBF = mem.read<uint32_t>(addr + 60);
+            origBBF = mem.read<uint32_t>(addr + 64);
 
             mem.write<uint32_t>(addr + 60, 0x08BA1001); // overwrite pbf
             mem.write<uint32_t>(addr + 64, 0x08BA1003); // overwrite bbf
