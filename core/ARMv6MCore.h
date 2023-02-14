@@ -147,6 +147,8 @@ private:
     void doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc);
     void doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc);
 
+    void doVFPDataProcessing(uint32_t opcode, uint32_t pc, bool dWidth);
+
     void updateTHUMBPC(uint32_t pc);
 
     static const uint32_t signBit = 0x80000000;

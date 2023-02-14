@@ -1736,20 +1736,6 @@ void ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
 
     bool dWidth = coproc & 1;
 
-    auto expandImm = [](uint8_t imm8, int width)
-    {
-        int e = width == 32 ? 8 : 11;
-        int f = width - e - 1;
-
-        auto eMask = ((1 << (e - 1)) - 1) & ~ 3;
-
-        bool sign = imm8 & 0x80;
-        auto exp = ((~imm8 & 0x40) << (e - 7)) | ((imm8 & 0x40) ? eMask  : 0) | ((imm8 >> 4) & 3);
-        auto frac = static_cast<uint64_t>(imm8 & 0xF) << (f - 4);
-
-        return (sign ? 1ULL : 0ULL) << (e + f) | static_cast<uint64_t>(exp) << f | frac;
-    };
-
     auto getVReg = [opcode](int pos, int hiLoPos, bool dWidth)
     {
         if(dWidth) // n nnnn
@@ -1850,457 +1836,7 @@ void ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
     else if(!op)
     {
         if((op1 & 0x30) == 0x20) // coprocessor data ops
-        {
-            bool t = opcode & (1 << 28);
-            auto opc1 = op1 & 0xF;
-            auto opc2 = (opcode >> 16) & 0xF;
-            auto opc3 = (opcode >> 6) & 3;
-            auto opc4 = opcode & 0xF;
-
-            if(t)
-            {
-                if((opc1 & 0b1000) == 0) // VSEL
-                {
-                    auto n = getVReg(16, 7, dWidth);
-                    auto d = getVReg(12, 22, dWidth);
-                    auto m = getVReg(0, 5, dWidth);
-
-                    int cc = (opcode >> 20) & 3;
-                    int cond = cc << 2 | ((cc ^ (cc << 1)) & 2);
-
-                    // only four valid conditions
-                    bool condVal = false;
-                    switch(cond)
-                    {
-                        case 0x0: // EQ
-                            condVal = cpsr & Flag_Z;
-                            break;
-                        case 0x6: // VS
-                            condVal = cpsr & Flag_V;
-                            break;
-                        case 0xA: // GE
-                            condVal = !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
-                            break;
-                        case 0xC: // GT
-                            condVal = !(cpsr & Flag_Z) && !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
-                            break;
-                    }
-
-                    if(dWidth)
-                        dReg(d) = dReg(condVal ? n : m);
-                    else
-                        sReg(d) = sReg(condVal ? n : m);
-                    
-                    return;
-                }
-                else if((opc1 & 0b1011) == 0b1011)
-                {
-                    if((opc2 & 0b1100) == 0b1000) // VRINT[ANPM]
-                    {
-                        assert(opc3  == 1);
-
-                        auto rm = (opcode >> 16) & 3; // away, even, +inf, -inf
-
-                        auto d = getVReg(12, 22, dWidth);
-                        auto m = getVReg(0, 5, dWidth);
-
-                        if(dWidth)
-                        {
-                            if(rm == 0) // away from 0
-                                dReg(d) = round(dReg(m));
-                            else if(rm == 1) // to even
-                                dReg(d) = dReg(m) - remainder(dReg(m), 1.0);
-                            else if(rm == 2) // to +infinity
-                                dReg(d) = ceil(dReg(m));
-                            else if(rm == 3) // to -infinity
-                                dReg(d) = floor(dReg(m));
-                        }
-                        else
-                        {
-                            if(rm == 0) // away from 0
-                                sReg(d) = roundf(sReg(m));
-                            else if(rm == 1) // to even
-                                sReg(d) = sReg(m) - remainderf(sReg(m), 1.0f);
-                            else if(rm == 2) // to +infinity
-                                sReg(d) = ceilf(sReg(m));
-                            else if(rm == 3) // to -infinity
-                                sReg(d) = floorf(sReg(m));
-                        }
-
-                        return;
-                    }
-                }
-            }
-            else
-            {
-                switch(opc1 & 0b1011)
-                {
-                    case 0b0010:
-                    {
-                        auto n = getVReg(16, 7, dWidth);
-                        auto d = getVReg(12, 22, dWidth);
-                        auto m = getVReg(0, 5, dWidth);
-
-                        if(opc3 & 1) // VNMUL
-                        {
-                            if(dWidth)
-                                dReg(d) = -(dReg(n) * dReg(m));
-                            else
-                                sReg(d) = -(sReg(n) * sReg(m));
-                        }
-                        else // VMUL
-                        {
-                            if(dWidth)
-                                dReg(d) = dReg(n) * dReg(m);
-                            else
-                                sReg(d) = sReg(n) * sReg(m);
-                        }
-
-                        return;
-                    }
-                    case 0b0011:
-                    {
-                        auto n = getVReg(16, 7, dWidth);
-                        auto d = getVReg(12, 22, dWidth);
-                        auto m = getVReg(0, 5, dWidth);
-
-                        if(opc3 & 1) // VSUB
-                        {
-                            if(dWidth)
-                                dReg(d) = dReg(n) - dReg(m);
-                            else
-                                sReg(d) = sReg(n) - sReg(m);
-                        }
-                        else // VADD
-                        {
-                            if(dWidth)
-                                dReg(d) = dReg(n) + dReg(m);
-                            else
-                                sReg(d) = sReg(n) + sReg(m);
-                        }
-
-                        return;
-                    }
-
-                    case 0b1000: // VDIV
-                    {
-                        assert(!(opc3 & 1));
-                        auto n = getVReg(16, 7, dWidth);
-                        auto d = getVReg(12, 22, dWidth);
-                        auto m = getVReg(0, 5, dWidth);
-
-                        if(dWidth)
-                            dReg(d) = dReg(n) / dReg(m);
-                        else
-                            sReg(d) = sReg(n) / sReg(m);
-
-                        return;
-                    }
-
-                    case 0b1001: // VFNMA/VFNMS
-                    {
-                        bool isSub = opcode & (1 << 6);
-
-                        auto n = getVReg(16, 7, dWidth);
-                        auto d = getVReg(12, 22, dWidth);
-                        auto m = getVReg(0, 5, dWidth);
-
-                        if(dWidth)
-                        {
-                            auto op1 = dReg(n);
-                            if(isSub)
-                                op1 = -op1;
-
-                            dReg(d) = -dReg(d) + op1 * dReg(m);
-                        }
-                        else
-                        {
-                            auto op1 = sReg(n);
-                            if(isSub)
-                                op1 = -op1;
-
-                            sReg(d) = -sReg(d) + op1 * sReg(m);
-                        }
-                        return;
-                    }
-
-                    case 0b1010: // VFMA/VFMS
-                    {
-                        bool isSub = opcode & (1 << 6);
-
-                        auto n = getVReg(16, 7, dWidth);
-                        auto d = getVReg(12, 22, dWidth);
-                        auto m = getVReg(0, 5, dWidth);
-
-                        if(dWidth)
-                        {
-                            auto op1 = dReg(n);
-                            if(isSub)
-                                op1 = -op1;
-
-                            dReg(d) = dReg(d) + op1 * dReg(m);
-                        }
-                        else
-                        {
-                            auto op1 = sReg(n);
-                            if(isSub)
-                                op1 = -op1;
-
-                            sReg(d) = sReg(d) + op1 * sReg(m);
-                        }
-                        return;
-                    }
-                    case 0b1011:
-                    {
-                        if((opc3 & 1) == 0) // VMOV (immediate)
-                        {
-                            auto imm = opc4 | opc2 << 4;
-
-                            auto d = getVReg(12, 22, dWidth);
-
-                            if(dWidth)
-                            {
-                                uint64_t imm64 = expandImm(imm, 64);
-                                fpRegs[d * 2] = imm64 & 0xFFFFFFFF;
-                                fpRegs[d * 2 + 1] = imm64 >> 32;
-                            }
-                            else
-                            {
-                                uint32_t imm32 = expandImm(imm, 32);
-                                fpRegs[d] = imm32;
-                            }
-                            return;
-                        }
-                        else if(opc2 == 0)
-                        {
-                            auto d = getVReg(12, 22, dWidth);
-                            auto m = getVReg(0, 5, dWidth);
-
-                            if(opc3 == 1) // VMOV (register)
-                            {
-                                if(dWidth)
-                                    dReg(d) = dReg(m);
-                                else
-                                    fpRegs[d] = fpRegs[m];
-                            }
-                            else // VABS
-                            {
-                                if(dWidth)
-                                    dReg(d) = fabs(dReg(m));
-                                else
-                                    sReg(d) = fabsf(sReg(m));
-                            }
-
-                            return;
-                        }
-                        else if(opc2 == 1)
-                        {
-                            auto d = getVReg(12, 22, dWidth);
-                            auto m = getVReg(0, 5, dWidth);
-
-                            if(opc3 == 1) // VNEG
-                            {
-                                if(dWidth)
-                                    dReg(d) = -dReg(m);
-                                else
-                                    sReg(d) = -sReg(m);
-                            }
-                            else // VSQRT
-                            {
-                                if(dWidth)
-                                    dReg(d) = sqrt(dReg(m));
-                                else
-                                    sReg(d) = sqrtf(sReg(m));
-                            }
-                            return;
-                        }
-                        else if(opc2 == 4 || opc2 == 5) // VCMP(E)
-                        {
-                            //bool e = opcode & (1 << 7); // nans
-                            bool withZero = opcode & (1 << 16);
-
-                            auto d = getVReg(12, 22, dWidth);
-
-                            if(dWidth)
-                            {
-                                double val = 0.0;
-
-                                if(withZero)
-                                    assert((opcode & 0x2F) == 0);
-                                else
-                                {
-                                    auto m = getVReg(0, 5, dWidth);
-                                    val = dReg(m);
-                                }
-
-                                if(dReg(d) == val)
-                                    fpscr = (fpscr & 0x0FFFFFFF) | Flag_C | Flag_Z;
-                                else if(dReg(d) < val)
-                                    fpscr = (fpscr & 0x0FFFFFFF) | Flag_N;
-                                else
-                                    fpscr = (fpscr & 0x0FFFFFFF) | Flag_C;
-
-                                return;
-                            }
-                            else
-                            {
-                                float val = 0.0f;
-
-                                if(withZero)
-                                    assert((opcode & 0x2F) == 0);
-                                else
-                                {
-                                    auto m = getVReg(0, 5, dWidth);
-                                    val = sReg(m);
-                                }
-
-                                if(sReg(d) == val)
-                                    fpscr = (fpscr & 0x0FFFFFFF) | Flag_C | Flag_Z;
-                                else if(sReg(d) < val)
-                                    fpscr = (fpscr & 0x0FFFFFFF) | Flag_N;
-                                else
-                                    fpscr = (fpscr & 0x0FFFFFFF) | Flag_C;
-
-                                return;
-                            }
-                        }
-                        else if(opc2 == 7 && opc3 == 3) // VCVT (single <-> double)
-                        {
-                            auto d = getVReg(12, 22, !dWidth);
-                            auto m = getVReg(0, 5, dWidth);
-
-                            if(dWidth) // D -> S
-                                sReg(d) = dReg(m);
-                            else // S -> D
-                                dReg(d) = sReg(m);
-
-                            return;
-                        }
-                        else if(opc2 == 8) // VCVT (int -> fp)
-                        {
-                            //bool toInt = false; // opc2 & 4;
-                            bool isUnsigned = !(opcode & (1 << 7));
-                            // TODO: rounding mode
-
-                            auto d = getVReg(12, 22, dWidth);
-                            auto m = getVReg(0, 5, false);
-
-                            if(dWidth)
-                            {
-                                if(isUnsigned)
-                                    dReg(d) = fpRegs[m];
-                                else
-                                    dReg(d) = static_cast<int32_t>(fpRegs[m]);
-                            }
-                            else
-                            {
-                                if(isUnsigned)
-                                    sReg(d) = fpRegs[m];
-                                else
-                                    sReg(d) = static_cast<int32_t>(fpRegs[m]);
-                            }
-
-                            return;
-                        }
-                        else if((opc2 & 0xA) == 0xA) // VCVT (fixed <-> float)
-                        {
-                            auto d = getVReg(12, 22, dWidth);
-                            bool toFixed = (opc2 & 4);
-                            bool isUnsigned = (opc2 & 1);
-
-                            int size = (opcode & (1 << 7)) ? 32 : 16;
-                            int imm = ((opcode << 1) & 0x1E) | ((opcode >> 5) & 1);
-                            int fracBits = size - imm;
-
-                            uint32_t mask = (1ull << size) - 1;
-
-                            if(toFixed)
-                            {
-                                if(dWidth)
-                                {
-                                    auto scaled = dReg(d) * (1 << fracBits);
-
-                                    if(isUnsigned)
-                                        fpRegs[d * 2] = static_cast<uint32_t>(scaled) & mask;
-                                    else
-                                        fpRegs[d * 2] = static_cast<int32_t>(scaled);
-
-                                    fpRegs[d * 2 + 1] = 0; // result is 32-bit
-                                }
-                                else
-                                {
-                                    auto scaled = sReg(d) * (1 << fracBits);
-
-                                    if(isUnsigned)
-                                        fpRegs[d] = static_cast<uint32_t>(scaled) & mask;
-                                    else
-                                        fpRegs[d] = static_cast<int32_t>(scaled);
-                                }
-
-                                return;
-                            }
-                            else
-                            {
-                                uint32_t fixed = (dWidth ? fpRegs[d * 2] : fpRegs[d]) & mask;
-                                if(!isUnsigned && size == 16 && (fixed & 0x8000))
-                                    fixed |= ~mask;
-
-                                if(dWidth)
-                                {
-                                    double f;
-                                    if(isUnsigned)
-                                        f = static_cast<double>(fixed) / (1 << fracBits);
-                                    else
-                                        f = static_cast<double>(static_cast<int32_t>(fixed)) / (1 << fracBits);
-
-                                    dReg(d) = f;
-                                }
-                                else
-                                {
-                                    float f;
-                                    if(isUnsigned)
-                                        f = static_cast<float>(fixed) / (1 << fracBits);
-                                    else
-                                        f = static_cast<float>(static_cast<int32_t>(fixed)) / (1 << fracBits);
-
-                                    sReg(d) = f;
-                                }
-
-                                return;
-                            }
-                        }
-                        else if(opc2 == 0xC || opc2 == 0xD) // VCVT (fp -> int)
-                        {
-                            bool isUnsigned = !(opc2 & 1);
-                            // TODO: rounding mode (1 << 7)
-
-                            auto d = getVReg(12, 22, false);
-                            auto m = getVReg(0, 5, dWidth);
-
-                            if(dWidth)
-                            {
-                                if(isUnsigned)
-                                    fpRegs[d] = static_cast<uint32_t>(dReg(m));
-                                else
-                                    fpRegs[d] = static_cast<int32_t>(dReg(m));
-                            }
-                            else
-                            {
-                                if(isUnsigned)
-                                    fpRegs[d] = static_cast<uint32_t>(sReg(m));
-                                else
-                                    fpRegs[d] = static_cast<int32_t>(sReg(m));
-                            }
-
-                            return;
-                        }
-                        break;
-                    }
-                }
-            }
-
-            printf("cdp %x %x %x %x %x\n", t, opc1, opc2, opc3, opc4);
-        }
+            return doVFPDataProcessing(opcode, pc, dWidth);
     }
 
     if(op1 == 4) // move to coprocessor from two arm regs
@@ -3576,6 +3112,485 @@ void ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
 
     printf("Unhandled long mul/div opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
     exit(1);
+}
+
+void ARMv6MCore::doVFPDataProcessing(uint32_t opcode, uint32_t pc, bool dWidth)
+{
+    auto getVReg = [opcode](int pos, int hiLoPos, bool dWidth)
+    {
+        if(dWidth) // n nnnn
+            return ((opcode >> pos) & 0xF) | ((opcode >> (hiLoPos - 4)) & 0x10);
+        
+        // nnnn n
+        if(pos == 0)
+            return ((opcode << 1) & 0x1E) | ((opcode >> hiLoPos) & 1);
+        
+        return ((opcode >> (pos - 1)) & 0x1E) | ((opcode >> hiLoPos) & 1);
+    };
+
+    auto expandImm = [](uint8_t imm8, int width)
+    {
+        int e = width == 32 ? 8 : 11;
+        int f = width - e - 1;
+
+        auto eMask = ((1 << (e - 1)) - 1) & ~ 3;
+
+        bool sign = imm8 & 0x80;
+        auto exp = ((~imm8 & 0x40) << (e - 7)) | ((imm8 & 0x40) ? eMask  : 0) | ((imm8 >> 4) & 3);
+        auto frac = static_cast<uint64_t>(imm8 & 0xF) << (f - 4);
+
+        return (sign ? 1ULL : 0ULL) << (e + f) | static_cast<uint64_t>(exp) << f | frac;
+    };
+
+    bool t = opcode & (1 << 28);
+    auto opc1 = (opcode >> 20) & 0xF;
+    auto opc2 = (opcode >> 16) & 0xF;
+    auto opc3 = (opcode >> 6) & 3;
+    auto opc4 = opcode & 0xF;
+
+    if(t)
+    {
+        if((opc1 & 0b1000) == 0) // VSEL
+        {
+            auto n = getVReg(16, 7, dWidth);
+            auto d = getVReg(12, 22, dWidth);
+            auto m = getVReg(0, 5, dWidth);
+
+            int cc = (opcode >> 20) & 3;
+            int cond = cc << 2 | ((cc ^ (cc << 1)) & 2);
+
+            // only four valid conditions
+            bool condVal = false;
+            switch(cond)
+            {
+                case 0x0: // EQ
+                    condVal = cpsr & Flag_Z;
+                    break;
+                case 0x6: // VS
+                    condVal = cpsr & Flag_V;
+                    break;
+                case 0xA: // GE
+                    condVal = !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
+                    break;
+                case 0xC: // GT
+                    condVal = !(cpsr & Flag_Z) && !!(cpsr & Flag_N) == !!(cpsr & Flag_V);
+                    break;
+            }
+
+            if(dWidth)
+                dReg(d) = dReg(condVal ? n : m);
+            else
+                sReg(d) = sReg(condVal ? n : m);
+            
+            return;
+        }
+        else if((opc1 & 0b1011) == 0b1011)
+        {
+            if((opc2 & 0b1100) == 0b1000) // VRINT[ANPM]
+            {
+                assert(opc3  == 1);
+
+                auto rm = (opcode >> 16) & 3; // away, even, +inf, -inf
+
+                auto d = getVReg(12, 22, dWidth);
+                auto m = getVReg(0, 5, dWidth);
+
+                if(dWidth)
+                {
+                    if(rm == 0) // away from 0
+                        dReg(d) = round(dReg(m));
+                    else if(rm == 1) // to even
+                        dReg(d) = dReg(m) - remainder(dReg(m), 1.0);
+                    else if(rm == 2) // to +infinity
+                        dReg(d) = ceil(dReg(m));
+                    else if(rm == 3) // to -infinity
+                        dReg(d) = floor(dReg(m));
+                }
+                else
+                {
+                    if(rm == 0) // away from 0
+                        sReg(d) = roundf(sReg(m));
+                    else if(rm == 1) // to even
+                        sReg(d) = sReg(m) - remainderf(sReg(m), 1.0f);
+                    else if(rm == 2) // to +infinity
+                        sReg(d) = ceilf(sReg(m));
+                    else if(rm == 3) // to -infinity
+                        sReg(d) = floorf(sReg(m));
+                }
+
+                return;
+            }
+        }
+    }
+    else
+    {
+        switch(opc1 & 0b1011)
+        {
+            case 0b0010:
+            {
+                auto n = getVReg(16, 7, dWidth);
+                auto d = getVReg(12, 22, dWidth);
+                auto m = getVReg(0, 5, dWidth);
+
+                if(opc3 & 1) // VNMUL
+                {
+                    if(dWidth)
+                        dReg(d) = -(dReg(n) * dReg(m));
+                    else
+                        sReg(d) = -(sReg(n) * sReg(m));
+                }
+                else // VMUL
+                {
+                    if(dWidth)
+                        dReg(d) = dReg(n) * dReg(m);
+                    else
+                        sReg(d) = sReg(n) * sReg(m);
+                }
+
+                return;
+            }
+            case 0b0011:
+            {
+                auto n = getVReg(16, 7, dWidth);
+                auto d = getVReg(12, 22, dWidth);
+                auto m = getVReg(0, 5, dWidth);
+
+                if(opc3 & 1) // VSUB
+                {
+                    if(dWidth)
+                        dReg(d) = dReg(n) - dReg(m);
+                    else
+                        sReg(d) = sReg(n) - sReg(m);
+                }
+                else // VADD
+                {
+                    if(dWidth)
+                        dReg(d) = dReg(n) + dReg(m);
+                    else
+                        sReg(d) = sReg(n) + sReg(m);
+                }
+
+                return;
+            }
+
+            case 0b1000: // VDIV
+            {
+                assert(!(opc3 & 1));
+                auto n = getVReg(16, 7, dWidth);
+                auto d = getVReg(12, 22, dWidth);
+                auto m = getVReg(0, 5, dWidth);
+
+                if(dWidth)
+                    dReg(d) = dReg(n) / dReg(m);
+                else
+                    sReg(d) = sReg(n) / sReg(m);
+
+                return;
+            }
+
+            case 0b1001: // VFNMA/VFNMS
+            {
+                bool isSub = opcode & (1 << 6);
+
+                auto n = getVReg(16, 7, dWidth);
+                auto d = getVReg(12, 22, dWidth);
+                auto m = getVReg(0, 5, dWidth);
+
+                if(dWidth)
+                {
+                    auto op1 = dReg(n);
+                    if(isSub)
+                        op1 = -op1;
+
+                    dReg(d) = -dReg(d) + op1 * dReg(m);
+                }
+                else
+                {
+                    auto op1 = sReg(n);
+                    if(isSub)
+                        op1 = -op1;
+
+                    sReg(d) = -sReg(d) + op1 * sReg(m);
+                }
+                return;
+            }
+
+            case 0b1010: // VFMA/VFMS
+            {
+                bool isSub = opcode & (1 << 6);
+
+                auto n = getVReg(16, 7, dWidth);
+                auto d = getVReg(12, 22, dWidth);
+                auto m = getVReg(0, 5, dWidth);
+
+                if(dWidth)
+                {
+                    auto op1 = dReg(n);
+                    if(isSub)
+                        op1 = -op1;
+
+                    dReg(d) = dReg(d) + op1 * dReg(m);
+                }
+                else
+                {
+                    auto op1 = sReg(n);
+                    if(isSub)
+                        op1 = -op1;
+
+                    sReg(d) = sReg(d) + op1 * sReg(m);
+                }
+                return;
+            }
+            case 0b1011:
+            {
+                if((opc3 & 1) == 0) // VMOV (immediate)
+                {
+                    auto imm = opc4 | opc2 << 4;
+
+                    auto d = getVReg(12, 22, dWidth);
+
+                    if(dWidth)
+                    {
+                        uint64_t imm64 = expandImm(imm, 64);
+                        fpRegs[d * 2] = imm64 & 0xFFFFFFFF;
+                        fpRegs[d * 2 + 1] = imm64 >> 32;
+                    }
+                    else
+                    {
+                        uint32_t imm32 = expandImm(imm, 32);
+                        fpRegs[d] = imm32;
+                    }
+                    return;
+                }
+                else if(opc2 == 0)
+                {
+                    auto d = getVReg(12, 22, dWidth);
+                    auto m = getVReg(0, 5, dWidth);
+
+                    if(opc3 == 1) // VMOV (register)
+                    {
+                        if(dWidth)
+                            dReg(d) = dReg(m);
+                        else
+                            fpRegs[d] = fpRegs[m];
+                    }
+                    else // VABS
+                    {
+                        if(dWidth)
+                            dReg(d) = fabs(dReg(m));
+                        else
+                            sReg(d) = fabsf(sReg(m));
+                    }
+
+                    return;
+                }
+                else if(opc2 == 1)
+                {
+                    auto d = getVReg(12, 22, dWidth);
+                    auto m = getVReg(0, 5, dWidth);
+
+                    if(opc3 == 1) // VNEG
+                    {
+                        if(dWidth)
+                            dReg(d) = -dReg(m);
+                        else
+                            sReg(d) = -sReg(m);
+                    }
+                    else // VSQRT
+                    {
+                        if(dWidth)
+                            dReg(d) = sqrt(dReg(m));
+                        else
+                            sReg(d) = sqrtf(sReg(m));
+                    }
+                    return;
+                }
+                else if(opc2 == 4 || opc2 == 5) // VCMP(E)
+                {
+                    //bool e = opcode & (1 << 7); // nans
+                    bool withZero = opcode & (1 << 16);
+
+                    auto d = getVReg(12, 22, dWidth);
+
+                    if(dWidth)
+                    {
+                        double val = 0.0;
+
+                        if(withZero)
+                            assert((opcode & 0x2F) == 0);
+                        else
+                        {
+                            auto m = getVReg(0, 5, dWidth);
+                            val = dReg(m);
+                        }
+
+                        if(dReg(d) == val)
+                            fpscr = (fpscr & 0x0FFFFFFF) | Flag_C | Flag_Z;
+                        else if(dReg(d) < val)
+                            fpscr = (fpscr & 0x0FFFFFFF) | Flag_N;
+                        else
+                            fpscr = (fpscr & 0x0FFFFFFF) | Flag_C;
+
+                        return;
+                    }
+                    else
+                    {
+                        float val = 0.0f;
+
+                        if(withZero)
+                            assert((opcode & 0x2F) == 0);
+                        else
+                        {
+                            auto m = getVReg(0, 5, dWidth);
+                            val = sReg(m);
+                        }
+
+                        if(sReg(d) == val)
+                            fpscr = (fpscr & 0x0FFFFFFF) | Flag_C | Flag_Z;
+                        else if(sReg(d) < val)
+                            fpscr = (fpscr & 0x0FFFFFFF) | Flag_N;
+                        else
+                            fpscr = (fpscr & 0x0FFFFFFF) | Flag_C;
+
+                        return;
+                    }
+                }
+                else if(opc2 == 7 && opc3 == 3) // VCVT (single <-> double)
+                {
+                    auto d = getVReg(12, 22, !dWidth);
+                    auto m = getVReg(0, 5, dWidth);
+
+                    if(dWidth) // D -> S
+                        sReg(d) = dReg(m);
+                    else // S -> D
+                        dReg(d) = sReg(m);
+
+                    return;
+                }
+                else if(opc2 == 8) // VCVT (int -> fp)
+                {
+                    //bool toInt = false; // opc2 & 4;
+                    bool isUnsigned = !(opcode & (1 << 7));
+                    // TODO: rounding mode
+
+                    auto d = getVReg(12, 22, dWidth);
+                    auto m = getVReg(0, 5, false);
+
+                    if(dWidth)
+                    {
+                        if(isUnsigned)
+                            dReg(d) = fpRegs[m];
+                        else
+                            dReg(d) = static_cast<int32_t>(fpRegs[m]);
+                    }
+                    else
+                    {
+                        if(isUnsigned)
+                            sReg(d) = fpRegs[m];
+                        else
+                            sReg(d) = static_cast<int32_t>(fpRegs[m]);
+                    }
+
+                    return;
+                }
+                else if((opc2 & 0xA) == 0xA) // VCVT (fixed <-> float)
+                {
+                    auto d = getVReg(12, 22, dWidth);
+                    bool toFixed = (opc2 & 4);
+                    bool isUnsigned = (opc2 & 1);
+
+                    int size = (opcode & (1 << 7)) ? 32 : 16;
+                    int imm = ((opcode << 1) & 0x1E) | ((opcode >> 5) & 1);
+                    int fracBits = size - imm;
+
+                    uint32_t mask = (1ull << size) - 1;
+
+                    if(toFixed)
+                    {
+                        if(dWidth)
+                        {
+                            auto scaled = dReg(d) * (1 << fracBits);
+
+                            if(isUnsigned)
+                                fpRegs[d * 2] = static_cast<uint32_t>(scaled) & mask;
+                            else
+                                fpRegs[d * 2] = static_cast<int32_t>(scaled);
+
+                            fpRegs[d * 2 + 1] = 0; // result is 32-bit
+                        }
+                        else
+                        {
+                            auto scaled = sReg(d) * (1 << fracBits);
+
+                            if(isUnsigned)
+                                fpRegs[d] = static_cast<uint32_t>(scaled) & mask;
+                            else
+                                fpRegs[d] = static_cast<int32_t>(scaled);
+                        }
+
+                        return;
+                    }
+                    else
+                    {
+                        uint32_t fixed = (dWidth ? fpRegs[d * 2] : fpRegs[d]) & mask;
+                        if(!isUnsigned && size == 16 && (fixed & 0x8000))
+                            fixed |= ~mask;
+
+                        if(dWidth)
+                        {
+                            double f;
+                            if(isUnsigned)
+                                f = static_cast<double>(fixed) / (1 << fracBits);
+                            else
+                                f = static_cast<double>(static_cast<int32_t>(fixed)) / (1 << fracBits);
+
+                            dReg(d) = f;
+                        }
+                        else
+                        {
+                            float f;
+                            if(isUnsigned)
+                                f = static_cast<float>(fixed) / (1 << fracBits);
+                            else
+                                f = static_cast<float>(static_cast<int32_t>(fixed)) / (1 << fracBits);
+
+                            sReg(d) = f;
+                        }
+
+                        return;
+                    }
+                }
+                else if(opc2 == 0xC || opc2 == 0xD) // VCVT (fp -> int)
+                {
+                    bool isUnsigned = !(opc2 & 1);
+                    // TODO: rounding mode (1 << 7)
+
+                    auto d = getVReg(12, 22, false);
+                    auto m = getVReg(0, 5, dWidth);
+
+                    if(dWidth)
+                    {
+                        if(isUnsigned)
+                            fpRegs[d] = static_cast<uint32_t>(dReg(m));
+                        else
+                            fpRegs[d] = static_cast<int32_t>(dReg(m));
+                    }
+                    else
+                    {
+                        if(isUnsigned)
+                            fpRegs[d] = static_cast<uint32_t>(sReg(m));
+                        else
+                            fpRegs[d] = static_cast<int32_t>(sReg(m));
+                    }
+
+                    return;
+                }
+                break;
+            }
+        }
+    }
+
+    printf("cdp %x %x %x %x %x\n", t, opc1, opc2, opc3, opc4);
 }
 
 void ARMv6MCore::updateTHUMBPC(uint32_t pc)
