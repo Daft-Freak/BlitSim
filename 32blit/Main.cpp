@@ -47,6 +47,8 @@ static uint32_t waveChannelData[CHANNEL_COUNT][2]; // data/callback
 
 static bool fileInTemp = false;
 
+static blit::Surface emuScreen(nullptr, blit::PixelFormat::P, {0, 0});
+
 // firmware ram in D2
 const uint32_t screenPtr    = 0x30000000; // (52 bytes)
 const uint32_t paletteAddr  = 0x30000040; // (1024 bytes)
@@ -472,6 +474,13 @@ void apiCallback(int index, uint32_t *regs)
             break;
         }
 
+        case 2048: // patched screen.pbf
+        {
+            auto pen = mem.read<uint32_t>(regs[0]);
+            emuScreen.pbf(reinterpret_cast<Pen *>(&pen), &emuScreen, regs[2], regs[3]);
+            break;
+        }
+
         default:
             debugf("blit API %i\n", index);
             break;
@@ -553,6 +562,42 @@ static bool openFile(const std::string &filename)
     cpuCore.setSP(0x20020000); // end of DTCM
     cpuCore.runCall(blitHeader.init);
 
+#ifdef SCREEN_SPEED_HACKS
+    // attempt to find blit::screen
+    auto ram = mem.mapAddress(0x20000400);
+
+    // assume 4 byte alignment in .data
+    for(int off = 0; off < 127 * 1024; off += 4)
+    {
+        // look for D1 addrs (blit::screen is a reference)
+        if(ram[off + 3] != 0x24)
+            continue;
+
+        uint32_t addr = *reinterpret_cast<uint32_t *>(ram + off);
+
+        auto data = mem.read<uint32_t>(addr);
+
+        // first word should be framebuffer address
+        if(data != fbAddr)
+            continue;
+
+        // check bounds/format to be sure
+        auto w = mem.read<uint32_t>(addr + 4);
+        auto h = mem.read<uint32_t>(addr + 8);
+        auto fmt = mem.read<uint32_t>(addr + 36);
+
+        if(blit::screen.bounds == blit::Size(w, h) && blit::screen.format == static_cast<blit::PixelFormat>(fmt))
+        {
+            // TODO: need to re-patch whenever screen mode changes
+            blit::debugf("patching screen at %x\n", addr);
+            mem.write<uint32_t>(addr + 60, 0x08BA1001); // overwrite pbf
+
+            emuScreen = blit::Surface(mem.mapAddress(fbAddr), blit::screen.format, blit::screen.bounds);
+            emuScreen.palette = reinterpret_cast<blit::Pen *>(mem.mapAddress(paletteAddr));
+            break;
+        }
+    }
+#endif
     return true;
 }
 
