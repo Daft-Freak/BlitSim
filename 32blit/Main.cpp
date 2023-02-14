@@ -50,7 +50,7 @@ static bool fileInTemp = false;
 static blit::Surface emuScreen(nullptr, blit::PixelFormat::P, {0, 0});
 
 // firmware ram in D2
-const uint32_t screenPtr    = 0x30000000; // (52 bytes)
+const uint32_t fwScreenAddr = 0x30000000; // (52 bytes)
 const uint32_t paletteAddr  = 0x30000040; // (1024 bytes)
 const uint32_t savePathAddr = 0x30000440; // (1024 bytes)
 const uint32_t channelsAddr = 0x30000840; // (1504 bytes (188 * 8))
@@ -157,15 +157,15 @@ void apiCallback(int index, uint32_t *regs)
         {
             set_screen_mode(static_cast<ScreenMode>(regs[0]));
             
-            mem.write<uint32_t>(screenPtr, fbAddr); // .data = framebuffer
+            mem.write<uint32_t>(fwScreenAddr, fbAddr); // .data = framebuffer
 
-            mem.write<uint32_t>(screenPtr + 4, screen.bounds.w); // .bounds.w
-            mem.write<uint32_t>(screenPtr + 8, screen.bounds.h); // .bounds.h
+            mem.write<uint32_t>(fwScreenAddr + 4, screen.bounds.w); // .bounds.w
+            mem.write<uint32_t>(fwScreenAddr + 8, screen.bounds.h); // .bounds.h
 
-            mem.write<uint32_t>(screenPtr + 36, static_cast<int>(screen.format)); // .format
-            mem.write<uint32_t>(screenPtr + 48, screen.palette ? paletteAddr : 0); // .palette
+            mem.write<uint32_t>(fwScreenAddr + 36, static_cast<int>(screen.format)); // .format
+            mem.write<uint32_t>(fwScreenAddr + 48, screen.palette ? paletteAddr : 0); // .palette
 
-            regs[0] = screenPtr; // return screen ptr
+            regs[0] = fwScreenAddr; // return screen ptr
             break;
         }
 
