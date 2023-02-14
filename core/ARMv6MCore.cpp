@@ -979,13 +979,10 @@ void ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
             numRegs++;
     }
 
-    int cycles = 0;
-
     if(isLoad) // POP
     {
         auto addr = loReg(curSP);
         auto ptr = reinterpret_cast<uint32_t *>(mem.mapAddress(addr & ~3));
-        auto loadCycles = 1;
 
         loReg(curSP) = addr + numRegs * 4;
 
@@ -993,10 +990,7 @@ void ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
         for(; regList; regList >>= 1, i++)
         {
             if(regList & 1)
-            {
                 regs[i] = *ptr++;
-                cycles += loadCycles;
-            }
         }
 
         if(pclr)
@@ -1006,8 +1000,6 @@ void ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
             {} // shouldn't happen, no exception handling
             else
                 updateTHUMBPC(newPC & ~1); /*ignore thumb bit*/
-
-            cycles += loadCycles; // TODO
         }
     }
     else // PUSH
@@ -1016,23 +1008,16 @@ void ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
         loReg(curSP) = addr;
 
         auto ptr = reinterpret_cast<uint32_t *>(mem.mapAddress(addr & ~3));
-        auto storeCycles = 1;
 
         int i = 0;
         for(; regList; regList >>= 1, i++)
         {
             if(regList & 1)
-            {
                 *ptr++ = regs[i];
-                cycles += storeCycles;
-            }
         }
 
         if(pclr)
-        {
             *ptr++ = loReg(Reg::LR);
-            cycles += storeCycles;
-        }
     }
 }
 
