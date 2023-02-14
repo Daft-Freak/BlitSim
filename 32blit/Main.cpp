@@ -480,6 +480,26 @@ void apiCallback(int index, uint32_t *regs)
             emuScreen.pbf(reinterpret_cast<Pen *>(&pen), &emuScreen, regs[2], regs[3]);
             break;
         }
+        case 2049: // patched screen.bbf
+        {
+            auto stack = reinterpret_cast<uint32_t *>(mem.mapAddress(regs[13]));
+            auto cnt = stack[0];
+            auto srcStep = stack[1];
+
+            // get src surface
+            auto srcPtr = reinterpret_cast<uint32_t *>(mem.mapAddress(regs[0]));
+            auto srcData = mem.mapAddress(srcPtr[0]);
+            Size srcBounds(srcPtr[1], srcPtr[2]);
+            auto srcFormat = static_cast<PixelFormat>(srcPtr[9]);
+
+            Surface src(srcData, srcFormat, srcBounds);
+
+            if(srcFormat == PixelFormat::P)
+                src.palette = reinterpret_cast<Pen *>(mem.mapAddress(srcPtr[12]));
+
+            emuScreen.bbf(&src, regs[1], &emuScreen, regs[3], cnt, srcStep);
+            break;
+        }
 
         default:
             debugf("blit API %i\n", index);
@@ -591,6 +611,7 @@ static bool openFile(const std::string &filename)
             // TODO: need to re-patch whenever screen mode changes
             blit::debugf("patching screen at %x\n", addr);
             mem.write<uint32_t>(addr + 60, 0x08BA1001); // overwrite pbf
+            mem.write<uint32_t>(addr + 64, 0x08BA1003); // overwrite bbf
 
             emuScreen = blit::Surface(mem.mapAddress(fbAddr), blit::screen.format, blit::screen.bounds);
             emuScreen.palette = reinterpret_cast<blit::Pen *>(mem.mapAddress(paletteAddr));
