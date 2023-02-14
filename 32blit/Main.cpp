@@ -47,6 +47,8 @@ static uint32_t waveChannelData[CHANNEL_COUNT][2]; // data/callback
 
 static bool fileInTemp = false;
 
+// screen speed hacks
+static uint32_t gameScreenPtr;
 static blit::Surface emuScreen(nullptr, blit::PixelFormat::P, {0, 0});
 
 // firmware ram in D2
@@ -477,6 +479,7 @@ void apiCallback(int index, uint32_t *regs)
         case 2048: // patched screen.pbf
         {
             auto pen = mem.read<uint32_t>(regs[0]);
+            emuScreen.alpha = mem.read<uint8_t>(gameScreenPtr + 28);
             emuScreen.pbf(reinterpret_cast<Pen *>(&pen), &emuScreen, regs[2], regs[3]);
             break;
         }
@@ -497,6 +500,7 @@ void apiCallback(int index, uint32_t *regs)
             if(srcFormat == PixelFormat::P)
                 src.palette = reinterpret_cast<Pen *>(mem.mapAddress(srcPtr[12]));
 
+            emuScreen.alpha = mem.read<uint8_t>(gameScreenPtr + 28);
             emuScreen.bbf(&src, regs[1], &emuScreen, regs[3], cnt, srcStep);
             break;
         }
@@ -610,6 +614,8 @@ static bool openFile(const std::string &filename)
         {
             // TODO: need to re-patch whenever screen mode changes
             blit::debugf("patching screen at %x\n", addr);
+            gameScreenPtr = addr;
+
             mem.write<uint32_t>(addr + 60, 0x08BA1001); // overwrite pbf
             mem.write<uint32_t>(addr + 64, 0x08BA1003); // overwrite bbf
 
