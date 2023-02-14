@@ -1766,12 +1766,14 @@ void ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
     {
         auto a = (op1 >> 1) & 7;
         bool c = dWidth;
-        auto b = (opcode >> 5) & 3;
+        [[maybe_unused]] auto b = (opcode >> 5) & 3;
 
         if((op1 & 0x31) == 0x20) // move to coprocessor
         {
-            if(c & !b) // VMOV to scalar
-            {}
+            if(c) // VMOV to scalar
+            {
+                assert(!b);
+            }
             else if(a == 7) // VMSR
             {}
             else if(a == 0) // VMOV
@@ -1787,8 +1789,10 @@ void ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
         }
         else if((op1 & 0x31) == 0x21) // move from coprocessor
         {
-            if(c && !b) // VMOV from scalar
-            {}
+            if(c) // VMOV from scalar
+            {
+                assert(!b);
+            }
             else if(a == 7) // VMRS
             {
                 assert((opcode & 0xF00FF) == 0x10010);
