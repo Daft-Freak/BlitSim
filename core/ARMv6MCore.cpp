@@ -2229,26 +2229,23 @@ void ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
                             {
                                 if(dWidth)
                                 {
-                                    uint32_t fixed = dReg(d) * (1 << fracBits);
+                                    auto scaled = dReg(d) * (1 << fracBits);
 
-                                    if(!isUnsigned && (fixed & (1 << (size - 1))))
-                                        fixed |= ~mask;
+                                    if(isUnsigned)
+                                        fpRegs[d * 2] = static_cast<uint32_t>(scaled) & mask;
                                     else
-                                        fixed &= mask;
+                                        fpRegs[d * 2] = static_cast<int32_t>(scaled);
 
-                                    fpRegs[d * 2] = fixed;
                                     fpRegs[d * 2 + 1] = 0; // result is 32-bit
                                 }
                                 else
                                 {
-                                    uint32_t fixed = sReg(d) * (1 << fracBits);
+                                    auto scaled = sReg(d) * (1 << fracBits);
 
-                                    if(!isUnsigned && (fixed & (1 << (size - 1))))
-                                        fixed |= ~mask;
+                                    if(isUnsigned)
+                                        fpRegs[d] = static_cast<uint32_t>(scaled) & mask;
                                     else
-                                        fixed &= mask;
-
-                                    fpRegs[d] = fixed;
+                                        fpRegs[d] = static_cast<int32_t>(scaled);
                                 }
 
                                 return;
