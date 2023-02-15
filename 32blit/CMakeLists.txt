@@ -3,6 +3,7 @@ if(32BLIT_PICO OR 32BLIT_HW)
 endif()
 
 blit_executable(BlitSim
+    API.cpp
     Main.cpp
 )
 #blit_assets_yaml(DaftBoy32 assets.yml)
