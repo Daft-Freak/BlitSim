@@ -36,6 +36,7 @@ static ARMv6MCore cpuCore(mem);
 
 static bool fileLoaded = false;
 std::string launchFile;
+static uint32_t homeDownTime = 0;
 
 static uint32_t metadataOffset;
 static BlitGameHeader blitHeader;
@@ -681,6 +682,16 @@ void update(uint32_t time)
     if(blit::now() - time >= 20)
         return;
 
+    // simulate a reset if home is held
+    if(blit::buttons.pressed & blit::Button::HOME)
+        homeDownTime = time;
+    else if(homeDownTime && time - homeDownTime > 1000)
+    {
+        homeDownTime = 0;
+        launchFile = "launcher.blit";
+    }
+
+    // sync inputs
     auto api = reinterpret_cast<blithw::API *>(mem.mapAddress(0xF800));
     api->buttons.state = blit::buttons.state;
     api->joystick.x = blit::joystick.x;
