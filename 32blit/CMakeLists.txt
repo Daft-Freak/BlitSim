@@ -11,3 +11,7 @@ blit_executable(BlitSim
 target_link_libraries(BlitSim BlitSimCore)
 
 set_target_properties(BlitSim PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
+
+if(EMSCRIPTEN)
+    target_link_options(BlitSim PRIVATE -sINITIAL_MEMORY=48MB --preload-file "${CMAKE_CURRENT_LIST_DIR}/em-files@/")
+endif()
