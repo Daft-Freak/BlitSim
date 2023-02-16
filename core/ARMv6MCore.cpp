@@ -29,6 +29,8 @@ void ARMv6MCore::reset()
 
     itState = 0;
 
+    paused = false;
+
     mem.reset();
 }
 
@@ -79,18 +81,36 @@ void ARMv6MCore::runCallLocked(uint32_t addr, uint32_t r0, uint32_t r1)
     doRunCall(addr, r0, r1);
 }
 
+void ARMv6MCore::pause()
+{
+    paused = true;
+}
+
+void ARMv6MCore::resume()
+{
+    execMutex.lock();
+    paused = false;
+    doRunCall(0, 0, 0);
+    execMutex.unlock();
+}
+
 void ARMv6MCore::doRunCall(uint32_t addr, uint32_t r0, uint32_t r1)
 {
-    // TODO: save/restore state for faked interrupts?
+    bool resume = addr == 0;
 
-    loReg(Reg::R0) = r0;
-    loReg(Reg::R1) = r1;
+    uint32_t oldPC = 0;
 
-    // fake a BL
-    auto oldPC = loReg(Reg::PC);
+    if(!resume)
+    {
+        loReg(Reg::R0) = r0;
+        loReg(Reg::R1) = r1;
 
-    loReg(Reg::LR) = 0x8FFFFFF; // somewhere invalid in flash
-    updateTHUMBPC(addr & ~ 1);
+        // fake a BL
+        oldPC = loReg(Reg::PC);
+
+        loReg(Reg::LR) = 0x8FFFFFF; // somewhere invalid in flash
+        updateTHUMBPC(addr & ~ 1);
+    }
 
     while(loReg(Reg::PC) != 0x8FFFFFE + 2)
     {
@@ -104,6 +124,12 @@ void ARMv6MCore::doRunCall(uint32_t addr, uint32_t r0, uint32_t r1)
             if(!itStart)
                 advanceIT();
             itStart = false;
+        }
+
+        if(paused)
+        {
+            assert(!oldPC);
+            return;
         }
 
         if(pauseForIntr && !inIT())

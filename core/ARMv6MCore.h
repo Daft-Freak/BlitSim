@@ -19,6 +19,10 @@ public:
     void runCallThread(uint32_t addr, uint32_t r0 = 0, uint32_t r1 = 0);
     void runCallLocked(uint32_t addr, uint32_t r0 = 0, uint32_t r1 = 0);
 
+    void pause();
+    void resume();
+    bool getPaused() const {return paused;}
+
     MemoryBus &getMem() {return mem;}
 
     void setAPICallback(APICallback cb){apiCallback = cb;}
