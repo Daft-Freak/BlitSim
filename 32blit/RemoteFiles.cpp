@@ -256,23 +256,15 @@ void downloadRemoteFile(const std::string &file, const std::string &destDir, std
 
     std::string destPath = destDir + file.substr(slash + 1);
 
-    // fetch the file info
+    // fetch the data
     char buf[200];
-    snprintf(buf, sizeof(buf), "%s/%s%s", cupboardFirebaseUrl, cupboardVersionDir.c_str(), it->first.c_str());
-    fetch(buf, [it, destPath, onDone](emscripten_fetch_t *fetchRes)
+    snprintf(buf, sizeof(buf), "%s/%s%s?alt=media", cupboardFirebaseUrl, cupboardVersionDir.c_str(), it->first.c_str());
+    fetch(buf, [destPath, onDone](emscripten_fetch_t *fetchRes)
     {
-        auto token = json::parse(std::string(fetchRes->data, fetchRes->numBytes))["downloadTokens"].get<std::string>();
-
-        // fetch the actual data
-        char buf[200];
-        snprintf(buf, sizeof(buf), "%s/%s%s?alt=media&token=%s", cupboardFirebaseUrl, cupboardVersionDir.c_str(), it->first.c_str(), token.c_str());
-        fetch(buf, [destPath, onDone](emscripten_fetch_t *fetchRes)
-        {
-            blit::File f(destPath, blit::OpenMode::write);
-            f.write(0, fetchRes->numBytes, fetchRes->data);
-            f.close();
-            onDone(destPath);
-        });
+        blit::File f(destPath, blit::OpenMode::write);
+        f.write(0, fetchRes->numBytes, fetchRes->data);
+        f.close();
+        onDone(destPath);
     });
 }
 
