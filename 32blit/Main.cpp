@@ -156,6 +156,15 @@ void render(uint32_t time)
 
     auto screenData = mem.mapAddress(0x3000FC00); // framebuffer
     memcpy(blit::screen.data, screenData, blit::screen.bounds.area() * blit::screen.pixel_stride);
+
+    if(cpuCore.getPaused())
+    {
+        blit::screen.pen = {0, 0, 0, 200};
+        blit::screen.clear();
+
+        blit::screen.pen = {255, 255, 255};
+        blit::screen.text("Waiting...", blit::minimal_font, blit::screen.clip, true, blit::TextAlign::center_center);
+    }
 }
 
 void update(uint32_t time)
