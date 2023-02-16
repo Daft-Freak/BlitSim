@@ -5,6 +5,8 @@
 
 #include "API.h"
 
+#include "RemoteFiles.h"
+
 #include "32blitAPI.h"
 #include "ARMv6MCore.h"
 #include "MemoryBus.h"
@@ -18,6 +20,7 @@ uint32_t metadataOffset;
 
 static std::map<uint32_t, void*> fileMap; // ptr size mismatch
 static uint32_t nextFileId = 1;
+static const uint32_t remoteFileFlag = 1 << 31;
 
 static uint32_t waveChannelData[CHANNEL_COUNT][2]; // data/callback
 
@@ -123,12 +126,21 @@ void apiCallback(int index, uint32_t *regs)
             auto file = getStringData(regs[0]);
             int mode = regs[1];
 
-            auto ret = api.open_file(std::string(file), mode);
+            void *ret;
+            bool isRemote = false;
+
+            if(file[0] == '~' && mode == OpenMode::read)
+            {
+                ret = openRemoteFile(std::string(file));
+                isRemote = true;
+            }
+            else
+                ret = api.open_file(std::string(file), mode);
 
             if(ret)
             {
                 fileMap.emplace(nextFileId, ret);
-                regs[0] = nextFileId++;
+                regs[0] = nextFileId++ | (isRemote ? remoteFileFlag : 0);
             }
             else
                 regs[0] = 0;
@@ -137,12 +149,15 @@ void apiCallback(int index, uint32_t *regs)
 
         case 7: // read_file
         {
-            auto fh = fileMap.at(regs[0]);
+            auto fh = fileMap.at(regs[0] & ~remoteFileFlag);
             auto offset = regs[1];
             auto length = regs[2];
             auto buffer = reinterpret_cast<char *>(mem.mapAddress(regs[3]));
 
-            regs[0] = api.read_file(fh, offset, length, buffer);
+            if(regs[0] & remoteFileFlag)
+                regs[0] = readRemoteFile(fh, offset, length, buffer);
+            else
+                regs[0] = api.read_file(fh, offset, length, buffer);
             break;
         }
 
@@ -159,8 +174,12 @@ void apiCallback(int index, uint32_t *regs)
 
         case 9: // close_file
         {
-            auto fh = fileMap.at(regs[0]);
+            auto fh = fileMap.at(regs[0] & ~remoteFileFlag);
             fileMap.erase(regs[0]);
+
+            if(regs[0] & remoteFileFlag)
+                regs[0] = closeRemoteFile(fh);
+            else
             regs[0] = api.close_file(fh);
             break;
         }
@@ -189,7 +208,7 @@ void apiCallback(int index, uint32_t *regs)
             auto outFileInfo = reinterpret_cast<uint32_t *>(mem.mapAddress(tmpAddr)); // stack allocate?
             auto outFileName = mem.mapAddress(tmpAddr + 32);
 
-            api.list_files(std::string(path), [&](FileInfo &info)
+            auto cb = [&](FileInfo &info)
             {
                 auto len = std::min(info.name.length(), size_t(1024 - 32));
                 memcpy(outFileName, info.name.data(), len);
@@ -201,8 +220,20 @@ void apiCallback(int index, uint32_t *regs)
                 outFileInfo[7] = info.size; // size
 
                 cpuCore.runCallLocked(invoker, callback, tmpAddr);
-            });
-        
+            };
+
+            api.list_files(std::string(path), cb);
+
+#ifdef __EMSCRIPTEN__
+            if(path == "/")
+            {
+                FileInfo i{"~cupboard", FileFlags::directory, 0};
+                cb(i);
+            }
+#endif
+            if(path[0] == '~')
+                listRemoteFiles(cb);
+
             break;
         }
         

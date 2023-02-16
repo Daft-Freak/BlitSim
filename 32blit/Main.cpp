@@ -3,9 +3,11 @@
 
 #include "32blit.hpp"
 
+#include "API.h"
+#include "RemoteFiles.h"
+
 #include "ARMv6MCore.h"
 #include "MemoryBus.h"
-#include "API.h"
 
 constexpr uint32_t blit_game_magic = 0x54494C42; // "BLIT"
 
@@ -133,6 +135,8 @@ void init()
         fileLoaded = openFile(launchPath);
     else if(blit::file_exists("launcher.blit"))
         fileLoaded = openFile("launcher.blit");
+
+    initRemoteFiles();
 }
 
 void render(uint32_t time)
@@ -177,7 +181,10 @@ void update(uint32_t time)
 
     if(!launchFile.empty())
     {
-        openFile(launchFile);
+        if(launchFile[0] == '~')
+            downloadRemoteFile(launchFile, "/tmp/", [](const std::string &path){openFile(path);});
+        else
+            openFile(launchFile);
         launchFile.clear();
     }
 }
