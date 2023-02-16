@@ -36,14 +36,14 @@ static void fetchSuccess(emscripten_fetch_t *fetch)
     emscripten_fetch_close(fetch);
 }
 
-static void fetch(const char *url, std::function<void(emscripten_fetch_t *)> onSuccess, const char *const *headers = nullptr)
+static void fetch(const char *url, std::function<void(emscripten_fetch_t *)> onSuccess, const char *const *headers = nullptr, int attrs = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY)
 {
     auto newFunc = new std::function(onSuccess);
 
     emscripten_fetch_attr_t attr;
     emscripten_fetch_attr_init(&attr);
     strcpy(attr.requestMethod, "GET");
-    attr.attributes = EMSCRIPTEN_FETCH_LOAD_TO_MEMORY;
+    attr.attributes = attrs;
     attr.onsuccess = fetchSuccess;
     attr.userData = newFunc;
     attr.requestHeaders = headers;
@@ -136,7 +136,7 @@ static void fetchRemoteBlitMetadata(RemoteFileInfo &info, std::function<void()> 
         memcpy(info.metadata, fetchRes->data, fetchRes->numBytes);
 
         onDone();
-    }, headers);
+    }, headers, EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_PERSIST_FILE);
 }
 
 void initRemoteFiles()
@@ -265,7 +265,7 @@ void downloadRemoteFile(const std::string &file, const std::string &destDir, std
         f.write(0, fetchRes->numBytes, fetchRes->data);
         f.close();
         onDone(destPath);
-    });
+    }, nullptr, EMSCRIPTEN_FETCH_LOAD_TO_MEMORY | EMSCRIPTEN_FETCH_REPLACE);
 }
 
 #else
