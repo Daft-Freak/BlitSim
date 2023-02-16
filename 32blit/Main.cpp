@@ -115,6 +115,9 @@ static bool openFile(const std::string &filename)
 
     mem.setFirmwareRAMCallbacks(firmwareMemRead, firmwareMemWrite);
 
+    for(int i = 0; i < CHANNEL_COUNT; i++)
+        blit::channels[i] = blit::AudioChannel();
+
     cpuCore.reset();
     cpuCore.setAPICallback(apiCallback);
 
