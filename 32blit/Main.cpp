@@ -155,9 +155,6 @@ void update(uint32_t time)
     if(!fileLoaded)
         return;
 
-    // avoid catch-up logic (emulated tick will also do it)
-    if(blit::now() - time >= 20)
-        return;
 
     // simulate a reset if home is held
     if(blit::buttons.pressed & blit::Button::HOME)
@@ -167,6 +164,10 @@ void update(uint32_t time)
         homeDownTime = 0;
         launchFile = "launcher.blit";
     }
+
+    // avoid catch-up logic (emulated tick will also do it)
+    if(blit::now() - time >= 20)
+        return;
 
     // sync inputs
     syncInput();
