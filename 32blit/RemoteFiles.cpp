@@ -2,11 +2,15 @@
 
 #include "RemoteFiles.h"
 
+#include "ARMv6MCore.h"
+
 #ifdef __EMSCRIPTEN__
 
 #include <emscripten/fetch.h>
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
+
+extern ARMv6MCore cpuCore;
 
 struct RemoteFileInfo
 {
@@ -125,12 +129,12 @@ static void fetchRemoteBlitList()
     });
 }
 
-static void fetchRemoteBlitMetadata(RemoteFileInfo &info)
+static void fetchRemoteBlitMetadata(RemoteFileInfo &info, std::function<void()> onDone)
 {
     // fetch the file info
     char buf[200];
     snprintf(buf, sizeof(buf), "%s/%s%s", cupboardFirebaseUrl, cupboardVersionDir.c_str(), info.filename.c_str());
-    fetch(buf, [&info](emscripten_fetch_t *fetchRes)
+    fetch(buf, [&info, onDone](emscripten_fetch_t *fetchRes)
     {
         auto token = json::parse(std::string(fetchRes->data, fetchRes->numBytes))["downloadTokens"].get<std::string>();
 
@@ -141,10 +145,12 @@ static void fetchRemoteBlitMetadata(RemoteFileInfo &info)
         // fetch the actual data
         char buf[200];
         snprintf(buf, sizeof(buf), "%s/%s%s?alt=media&token=%s", cupboardFirebaseUrl, cupboardVersionDir.c_str(), info.filename.c_str(), token.c_str());
-        fetch(buf, [&info](emscripten_fetch_t *fetchRes)
+        fetch(buf, [&info, onDone](emscripten_fetch_t *fetchRes)
         {
             info.metadata = new uint8_t[fetchRes->numBytes];
             memcpy(info.metadata, fetchRes->data, fetchRes->numBytes);
+
+            onDone();
         }, headers);
     });
 }
@@ -230,7 +236,16 @@ int32_t readRemoteFile(void *fh, uint32_t offset, uint32_t length, char* buffer)
         if(info->metadata)
             memcpy(buffer, info->metadata + (offset - info->metadataOffset), length);
         else
-            fetchRemoteBlitMetadata(*info); // TODO: stop the emulator until we have the data
+        {
+            // stop the emulator until we have the data
+            cpuCore.pause();
+
+            fetchRemoteBlitMetadata(*info, [info, buffer, offset, length]()
+            {
+                memcpy(buffer, info->metadata + (offset - info->metadataOffset), length);
+                cpuCore.resume();
+            });
+        }
     }
     else
         blit::debugf("remote read %p(%x) %u %u\n", fh, info->metadataOffset, offset, length);
