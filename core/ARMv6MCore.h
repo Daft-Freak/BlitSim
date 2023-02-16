@@ -182,4 +182,6 @@ private:
 
     volatile bool pauseForIntr = false;
     std::mutex execMutex;
+
+    bool paused = false;
 };

@@ -151,7 +151,8 @@ void render(uint32_t time)
         return;
     }
 
-    cpuCore.runCall(blitHeader.render, time);
+    if(!cpuCore.getPaused())
+        cpuCore.runCall(blitHeader.render, time);
 
     auto screenData = mem.mapAddress(0x3000FC00); // framebuffer
     memcpy(blit::screen.data, screenData, blit::screen.bounds.area() * blit::screen.pixel_stride);
@@ -180,7 +181,8 @@ void update(uint32_t time)
     syncInput();
 
     // this isn't update, it's the layer above
-    cpuCore.runCall(blitHeader.tick, blit::now());
+    if(!cpuCore.getPaused())
+        cpuCore.runCall(blitHeader.tick, blit::now());
 
     if(!launchFile.empty())
     {
