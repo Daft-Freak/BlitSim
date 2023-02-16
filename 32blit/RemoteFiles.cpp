@@ -100,59 +100,43 @@ static void fetchRemoteBlitList()
             pos = cupboardVersionDir.find("/");
         }
 
-        // fetch the list file info
+        // fetch the list file
         char buf[200];
-        snprintf(buf, sizeof(buf), "%s/%slist.json", cupboardFirebaseUrl, cupboardVersionDir.c_str());
+        snprintf(buf, sizeof(buf), "%s/%slist.json?alt=media", cupboardFirebaseUrl, cupboardVersionDir.c_str());
         fetch(buf, [](emscripten_fetch_t *fetchRes)
         {
-            auto token = json::parse(std::string(fetchRes->data, fetchRes->numBytes))["downloadTokens"].get<std::string>();
-
-            // fetch the actual data
-            char buf[200];
-            snprintf(buf, sizeof(buf), "%s/%slist.json?alt=media&token=%s", cupboardFirebaseUrl, cupboardVersionDir.c_str(), token.c_str());
-            fetch(buf, [](emscripten_fetch_t *fetchRes)
+            auto j = json::parse(std::string(fetchRes->data, fetchRes->numBytes));
+            for(auto item : j)
             {
-                auto j = json::parse(std::string(fetchRes->data, fetchRes->numBytes));
-                for(auto item : j)
-                {
-                    auto blit = item["blit"].get<std::string>();
-                    auto metadataOffset = item["metadataOffset"].get<uint32_t>();
+                auto blit = item["blit"].get<std::string>();
+                auto metadataOffset = item["metadataOffset"].get<uint32_t>();
 
-                    RemoteFileInfo info;
-                    info.filename = blit;
-                    info.metadataOffset = metadataOffset;
+                RemoteFileInfo info;
+                info.filename = blit;
+                info.metadataOffset = metadataOffset;
 
-                    cupboardFiles.emplace(blit, info);
-                }
-            });
+                cupboardFiles.emplace(blit, info);
+            }
         });
     });
 }
 
 static void fetchRemoteBlitMetadata(RemoteFileInfo &info, std::function<void()> onDone)
 {
-    // fetch the file info
+    char rangeHeader[20];
+    snprintf(rangeHeader, sizeof(rangeHeader), "bytes=%u-", info.metadataOffset);
+    const char* headers[] = {"Range", rangeHeader, nullptr};
+
+    // fetch the data
     char buf[200];
-    snprintf(buf, sizeof(buf), "%s/%s%s", cupboardFirebaseUrl, cupboardVersionDir.c_str(), info.filename.c_str());
+    snprintf(buf, sizeof(buf), "%s/%s%s?alt=media", cupboardFirebaseUrl, cupboardVersionDir.c_str(), info.filename.c_str());
     fetch(buf, [&info, onDone](emscripten_fetch_t *fetchRes)
     {
-        auto token = json::parse(std::string(fetchRes->data, fetchRes->numBytes))["downloadTokens"].get<std::string>();
+        info.metadata = new uint8_t[fetchRes->numBytes];
+        memcpy(info.metadata, fetchRes->data, fetchRes->numBytes);
 
-        char rangeHeader[20];
-        snprintf(rangeHeader, sizeof(rangeHeader), "bytes=%u-", info.metadataOffset);
-        const char* headers[] = {"Range", rangeHeader, nullptr};
-
-        // fetch the actual data
-        char buf[200];
-        snprintf(buf, sizeof(buf), "%s/%s%s?alt=media&token=%s", cupboardFirebaseUrl, cupboardVersionDir.c_str(), info.filename.c_str(), token.c_str());
-        fetch(buf, [&info, onDone](emscripten_fetch_t *fetchRes)
-        {
-            info.metadata = new uint8_t[fetchRes->numBytes];
-            memcpy(info.metadata, fetchRes->data, fetchRes->numBytes);
-
-            onDone();
-        }, headers);
-    });
+        onDone();
+    }, headers);
 }
 
 void initRemoteFiles()
