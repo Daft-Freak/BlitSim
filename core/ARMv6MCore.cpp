@@ -1774,188 +1774,191 @@ void ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
         return ((opcode >> (pos - 1)) & 0x1E) | ((opcode >> hiLoPos) & 1);
     };
 
-
-    if(op)
+    switch(op1 >> 4)
     {
-        auto a = (op1 >> 1) & 7;
-        bool c = dWidth;
-        [[maybe_unused]] auto b = (opcode >> 5) & 3;
-
-        if((op1 & 0x30) == 0x20) // move to coprocessor
+        case 0: // load/store or 64-bit coprocessor <-> arm
         {
-            bool toArm = op1 & 1;
-
-            auto tReg = static_cast<Reg>((opcode >> 12) & 0xF);
-
-            if(c) // VMOV to scalar
+            if(op && !(op1 & 0b1010))
             {
-                assert(!b);
-            }
-            else if(a == 7) // VMSR/VMRS
-            {
-                assert((opcode & 0xF00FF) == 0x10010);
-                if(toArm)
+                assert(((opcode >> 4) & 0b1101) == 1);
+
+                bool toArm = op1 & 1;
+
+                auto tReg = static_cast<Reg>((opcode >> 12) & 0xF);
+                auto t2Reg = static_cast<Reg>((opcode >> 16) & 0xF);
+
+                auto m = getVReg(0, 5, dWidth);
+
+                if(dWidth) // two regs <-> d reg
                 {
-                    // transfer flags
-                    if(tReg == Reg::PC)
-                        cpsr = (cpsr & 0x0FFFFFFF) | (fpscr & 0xF0000000);
+                    if(toArm)
+                    {
+                        loReg(tReg) = fpRegs[m * 2];
+                        loReg(t2Reg) = fpRegs[m * 2 + 1];
+                    }
                     else
-                        loReg(tReg) = fpscr;
+                    {
+                        fpRegs[m * 2] = loReg(tReg);
+                        fpRegs[m * 2 + 1] = loReg(t2Reg);
+                    }
 
                     return;
                 }
+                else // two regs <-> two s regs
+                {
+                    break;
+                }
             }
-            else if(a == 0) // VMOV
+            [[fallthrough]];
+        }
+
+        case 1: // load/store
+        {
+            bool isLoad = op1 & 1;
+
+            [[maybe_unused]] bool t2 = opcode & (1 << 28);
+
+            bool index = opcode & (1 << 24);
+            bool add = opcode & (1 << 23);
+            //bool d = opcode & (1 << 22);
+            bool writeback = opcode & (1 << 21);
+
+            assert(!t2);
+
+            auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
+            auto d = getVReg(12, 22, dWidth);
+
+            auto imm = (opcode & 0xFF) << 2;
+
+            int regs = (opcode & 0xFF);
+
+            uint32_t offsetAddr = loReg(baseReg);
+
+            // align PC for literal load
+            if(baseReg == Reg::PC)
             {
-                assert((opcode & 0x6F) == 0);
+                assert(isLoad);
+                offsetAddr = (offsetAddr - 2) & ~2;
+            }
+
+            if(add)
+                offsetAddr += imm;
+            else
+                offsetAddr -= imm;
+
+            uint32_t addr = index ? offsetAddr : loReg(baseReg);
+
+            if(writeback)
+                loReg(baseReg) = offsetAddr;
+
+            if(isLoad)
+            {
+                if(index && !writeback) // VLDR
+                    regs = 1;
+                else // VLDM
+                {
+                    assert(!(index == add && writeback));
+
+                    if(dWidth)
+                    {
+                        assert(!(regs & 1)); // FLDMX
+                        regs /= 2;
+                    }
+                }
+
+                for(int i = 0; i < regs; i++)
+                {
+                    if(dWidth)
+                    {
+                        fpRegs[(d + i) * 2] = readMem32(addr);
+                        fpRegs[(d + i) * 2 + 1] = readMem32(addr + 4);
+                        addr += 8;
+                    }
+                    else
+                    {
+                        fpRegs[d + i] = readMem32(addr);
+                        addr += 4;
+                    }
+                }
+            }
+            else
+            {
+                if(index && !writeback) // VSTR
+                    regs = 1;
+                else // VSTM
+                {
+                    assert(!(index == add && !writeback));
+
+                    if(dWidth)
+                    {
+                        assert(!(regs & 1)); // FSTMX
+                        regs /= 2;
+                    }
+                }
+
+                for(int i = 0; i < regs; i++)
+                {
+                    if(dWidth)
+                    {
+                        writeMem32(addr, fpRegs[(d + i) * 2]);
+                        writeMem32(addr + 4, fpRegs[(d + i) * 2 + 1]);
+                        addr += 8;
+                    }
+                    else
+                    {
+                        writeMem32(addr, fpRegs[d + i]);
+                        addr += 4;
+                    }
+                }
+            }
+
+            return;
+        }
+
+        case 2: // 32-bit coprocessor <-> arm or data ops
+        {
+            if(op) // 32-bit coprocessor <-> arm
+            {
+                bool toArm = op1 & 1;
+                auto a = (op1 >> 1) & 7;
 
                 auto tReg = static_cast<Reg>((opcode >> 12) & 0xF);
-                auto n = getVReg(16, 7, false);
 
-                if(toArm)
-                    loReg(tReg) = fpRegs[n];
-                else
-                    fpRegs[n] = loReg(tReg);
-                return;
+                if(dWidth) // VMOV to scalar
+                {
+                    assert(!b);
+                }
+                else if(a == 7) // VMSR/VMRS
+                {
+                    assert((opcode & 0xF00FF) == 0x10010);
+                    if(toArm)
+                    {
+                        // transfer flags
+                        if(tReg == Reg::PC)
+                            cpsr = (cpsr & 0x0FFFFFFF) | (fpscr & 0xF0000000);
+                        else
+                            loReg(tReg) = fpscr;
+
+                        return;
+                    }
+                }
+                else if(a == 0) // VMOV
+                {
+                    assert((opcode & 0x6F) == 0);
+
+                    auto tReg = static_cast<Reg>((opcode >> 12) & 0xF);
+                    auto n = getVReg(16, 7, false);
+
+                    if(toArm)
+                        loReg(tReg) = fpRegs[n];
+                    else
+                        fpRegs[n] = loReg(tReg);
+                    return;
+                }
             }
+            else // coprocessor data ops
+                return doVFPDataProcessing(opcode, pc, dWidth);
         }
-        else if((op1 & 0x3E) == 4)
-        {
-            assert(((opcode >> 4) & 0b1101) == 1);
-
-            bool toArm = op1 & 1;
-
-            auto tReg = static_cast<Reg>((opcode >> 12) & 0xF);
-            auto t2Reg = static_cast<Reg>((opcode >> 16) & 0xF);
-
-            auto m = getVReg(0, 5, dWidth);
-
-            if(dWidth) // two regs <-> d reg
-            {
-                if(toArm)
-                {
-                    loReg(tReg) = fpRegs[m * 2];
-                    loReg(t2Reg) = fpRegs[m * 2 + 1];
-                }
-                else
-                {
-                    fpRegs[m * 2] = loReg(tReg);
-                    fpRegs[m * 2 + 1] = loReg(t2Reg);
-                }
-
-                return;
-            }
-            else // two regs <-> two s regs
-            {}
-        }
-    }
-    else if(!op)
-    {
-        if((op1 & 0x30) == 0x20) // coprocessor data ops
-            return doVFPDataProcessing(opcode, pc, dWidth);
-    }
-
-    if(!(op1 & 0x20)) // load/store coprocessor
-    {
-        bool isLoad = op1 & 1;
-
-        [[maybe_unused]] bool t2 = opcode & (1 << 28);
-
-        bool index = opcode & (1 << 24);
-        bool add = opcode & (1 << 23);
-        //bool d = opcode & (1 << 22);
-        bool writeback = opcode & (1 << 21);
-
-        assert(!t2);
-
-        auto baseReg = static_cast<Reg>((opcode >> 16) & 0xF);
-        auto d = getVReg(12, 22, dWidth);
-
-        auto imm = (opcode & 0xFF) << 2;
-
-        int regs = (opcode & 0xFF);
-
-        uint32_t offsetAddr = loReg(baseReg);
-
-        // align PC for literal load
-        if(baseReg == Reg::PC)
-        {
-            assert(isLoad);
-            offsetAddr = (offsetAddr - 2) & ~2;
-        }
-
-        if(add)
-            offsetAddr += imm;
-        else
-            offsetAddr -= imm;
-
-        uint32_t addr = index ? offsetAddr : loReg(baseReg);
-
-        if(writeback)
-            loReg(baseReg) = offsetAddr;
-
-        if(isLoad)
-        {
-            if(index && !writeback) // VLDR
-                regs = 1;
-            else // VLDM
-            {
-                assert(!(index == add && writeback));
-
-                if(dWidth)
-                {
-                    assert(!(regs & 1)); // FLDMX
-                    regs /= 2;
-                }
-            }
-
-            for(int i = 0; i < regs; i++)
-            {
-                if(dWidth)
-                {
-                    fpRegs[(d + i) * 2] = readMem32(addr);
-                    fpRegs[(d + i) * 2 + 1] = readMem32(addr + 4);
-                    addr += 8;
-                }
-                else
-                {
-                    fpRegs[d + i] = readMem32(addr);
-                    addr += 4;
-                }
-            }
-        }
-        else
-        {
-            if(index && !writeback) // VSTR
-                regs = 1;
-            else // VSTM
-            {
-                assert(!(index == add && !writeback));
-
-                if(dWidth)
-                {
-                    assert(!(regs & 1)); // FSTMX
-                    regs /= 2;
-                }
-            }
-
-            for(int i = 0; i < regs; i++)
-            {
-                if(dWidth)
-                {
-                    writeMem32(addr, fpRegs[(d + i) * 2]);
-                    writeMem32(addr + 4, fpRegs[(d + i) * 2 + 1]);
-                    addr += 8;
-                }
-                else
-                {
-                    writeMem32(addr, fpRegs[d + i]);
-                    addr += 4;
-                }
-            }
-        }
-
-        return;
     }
 
     printf("Unhandled coprocessor opcode %08X (%X %X %X) @%08X\n", opcode, op, coproc, op1, pc - 6);
