@@ -208,8 +208,10 @@ uint8_t *MemoryBus::mapAddress(uint32_t addr)
                 return d2RAM + (addr & 0x7FFFF);
             break;
 
-        //case Region_D3_Backup:
-        //    return d3RAM + (addr & 0);
+        case Region_D3_Backup:
+            if(addr < 0x38800000)
+                return d3RAM + (addr & 0xFFFF);
+            return backupRAM + (addr & 0xFFF);
 
         case Region_QSPI:
         case Region_QSPI2:
