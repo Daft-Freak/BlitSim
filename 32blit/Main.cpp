@@ -21,7 +21,8 @@ static BlitGameHeader blitHeader;
 static bool parseBlit(blit::File &file)
 {
     RawMetadata meta;
-    parseBlitMetadata(file, meta, metadataOffset);
+    if(!parseBlitMetadata(file, meta, metadataOffset))
+        return false;
 
     blit::debugf("Loading \"%s\" %s by %s\n", meta.title, meta.version, meta.author);
 
@@ -116,10 +117,6 @@ void render(uint32_t time)
 
 void update(uint32_t time)
 {
-    if(!fileLoaded)
-        return;
-
-
     // simulate a reset if home is held
     if(blit::buttons.pressed & blit::Button::HOME)
         homeDownTime = time;
@@ -137,7 +134,7 @@ void update(uint32_t time)
     syncInput();
 
     // this isn't update, it's the layer above
-    if(!cpuCore.getPaused())
+    if(fileLoaded && !cpuCore.getPaused())
         cpuCore.runCall(blitHeader.tick, blit::now());
 
     if(!launchFile.empty())
@@ -145,7 +142,7 @@ void update(uint32_t time)
         if(launchFile[0] == '~')
             downloadRemoteFile(launchFile, "/tmp/", [](const std::string &path){openFile(path);});
         else
-            openFile(launchFile);
+            fileLoaded = openFile(launchFile);
         launchFile.clear();
     }
 }
