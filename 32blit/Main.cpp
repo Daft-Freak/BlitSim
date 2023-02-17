@@ -22,15 +22,19 @@ struct BlitGameHeader {
   uint32_t start;
 };
 
-// missing the "BLITMETA" header and size
-struct RawMetadata {
-  uint32_t crc32;
-  char datetime[16];
-  char title[25];
-  char description[129];
-  char version[17];
-  char author[17];
+// missing the "BLITMETA" header
+#pragma pack(push, 1)
+struct RawMetadata
+{
+    uint16_t length;
+    uint32_t crc32;
+    char datetime[16];
+    char title[25];
+    char description[129];
+    char version[17];
+    char author[17];
 };
+#pragma pack(pop)
 
 MemoryBus mem;
 ARMv6MCore cpuCore(mem);
@@ -40,9 +44,9 @@ static uint32_t homeDownTime = 0;
 
 static BlitGameHeader blitHeader;
 
-static bool parseBlit(blit::File &file)
+bool parseBlitMetadata(blit::File &file, RawMetadata &meta, uint32_t &metadataOffset)
 {
-    uint8_t buf[10];
+    uint8_t buf[8];
 
     file.read(0, 8, reinterpret_cast<char *>(buf));
 
@@ -68,13 +72,11 @@ static bool parseBlit(blit::File &file)
     uint32_t length = blitHeader.end - 0x90000000;
 
     // read metadata
-    RawMetadata meta;
-
     auto offset = relocsEnd + length;
 
-    file.read(offset, 10, reinterpret_cast<char *>(buf));
+    file.read(offset, 8, reinterpret_cast<char *>(buf));
 
-    if(memcmp(buf, "BLITMETA", 4) != 0)
+    if(memcmp(buf, "BLITMETA", 8) != 0)
     {
         blit::debugf("Incorrect metadata header!\n");
         return false;
@@ -82,18 +84,28 @@ static bool parseBlit(blit::File &file)
 
     metadataOffset = length;
 
-    uint16_t metadataLen = buf[8] | buf[9] << 8;
+    file.read(offset + 8, sizeof(meta), reinterpret_cast<char *>(&meta));
 
-    length += metadataLen + 10;
-    offset += 10;
+    return true;
+}
 
-    file.read(offset, sizeof(meta), reinterpret_cast<char *>(&meta));
+static bool parseBlit(blit::File &file)
+{
+    RawMetadata meta;
+    parseBlitMetadata(file, meta, metadataOffset);
+
+    auto length = metadataOffset + meta.length + 10;
 
     blit::debugf("Loading \"%s\" %s by %s\n", meta.title, meta.version, meta.author);
 
     // write directly to start of qspi flash
     // (so we don't have to apply relocs)
     auto flashPtr = mem.mapAddress(0x90000000);
+
+    uint8_t buf[8];
+    file.read(0, 8, reinterpret_cast<char *>(buf));
+    uint32_t numRelocs = buf[4] | buf[5] << 8 | buf[6] << 16 | buf[7] << 24;
+    uint32_t relocsEnd = numRelocs * 4 + 8;
 
     file.read(relocsEnd, length, reinterpret_cast<char *>(flashPtr));
 
