@@ -18,9 +18,14 @@ std::string launchFile;
 
 uint32_t metadataOffset;
 
-static std::map<uint32_t, void*> fileMap; // ptr size mismatch
+struct FileData
+{
+    void *fh; // real handle
+    bool isRemote;
+};
+
+static std::map<uint32_t, FileData> fileMap;
 static uint32_t nextFileId = 1;
-static const uint32_t remoteFileFlag = 1 << 31;
 
 static uint32_t waveChannelData[CHANNEL_COUNT][2]; // data/callback
 
@@ -139,8 +144,8 @@ void apiCallback(int index, uint32_t *regs)
 
             if(ret)
             {
-                fileMap.emplace(nextFileId, ret);
-                regs[0] = nextFileId++ | (isRemote ? remoteFileFlag : 0);
+                fileMap.emplace(nextFileId, FileData{ret, isRemote});
+                regs[0] = nextFileId++;
             }
             else
                 regs[0] = 0;
@@ -149,44 +154,44 @@ void apiCallback(int index, uint32_t *regs)
 
         case 7: // read_file
         {
-            auto fh = fileMap.at(regs[0] & ~remoteFileFlag);
+            auto &file = fileMap.at(regs[0]);
             auto offset = regs[1];
             auto length = regs[2];
             auto buffer = reinterpret_cast<char *>(mem.mapAddress(regs[3]));
 
-            if(regs[0] & remoteFileFlag)
-                regs[0] = readRemoteFile(fh, offset, length, buffer);
+            if(file.isRemote)
+                regs[0] = readRemoteFile(file.fh, offset, length, buffer);
             else
-                regs[0] = api.read_file(fh, offset, length, buffer);
+                regs[0] = api.read_file(file.fh, offset, length, buffer);
             break;
         }
 
         case 8: // write_file
         {
-            auto fh = fileMap.at(regs[0]);
+            auto &file = fileMap.at(regs[0]);
             auto offset = regs[1];
             auto length = regs[2];
             auto buffer = reinterpret_cast<char *>(mem.mapAddress(regs[3]));
 
-            regs[0] = api.write_file(fh, offset, length, buffer);
+            regs[0] = api.write_file(file.fh, offset, length, buffer);
             break;
         }
 
         case 9: // close_file
         {
-            auto fh = fileMap.at(regs[0] & ~remoteFileFlag);
+            auto &file = fileMap.at(regs[0]);
             fileMap.erase(regs[0]);
 
-            if(regs[0] & remoteFileFlag)
-                regs[0] = closeRemoteFile(fh);
+            if(file.isRemote)
+                regs[0] = closeRemoteFile(file.fh);
             else
-            regs[0] = api.close_file(fh);
+                regs[0] = api.close_file(file.fh);
             break;
         }
 
         case 10: // get_file_length
         {
-            auto fh = fileMap.at(regs[0]);
+            auto fh = fileMap.at(regs[0]).fh;
             regs[0] = api.get_file_length(fh);
             break;
         }
