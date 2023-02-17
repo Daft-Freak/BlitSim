@@ -279,8 +279,8 @@ void apiCallback(int index, uint32_t *regs)
 
             // append the real title
             auto metadataAddr = 0x90000000 + metadataOffset + 10/*magic/len*/;
-            auto metaTitle  = reinterpret_cast<char *>(mem.mapAddress(metadataAddr +  20));
-            snprintf(reinterpret_cast<char *>(mem.mapAddress(savePathAddr)), 1024, "%s%s/", path, metaTitle);
+            auto metaTitle = reinterpret_cast<char *>(mem.mapAddress(metadataAddr +  20));
+            snprintf(outPath, 1024, "%s%s/", path, metaTitle);
 
             if(!directory_exists(outPath))
                 create_directory(outPath);
