@@ -4,37 +4,11 @@
 #include "32blit.hpp"
 
 #include "API.h"
+#include "Metadata.h"
 #include "RemoteFiles.h"
 
 #include "ARMv6MCore.h"
 #include "MemoryBus.h"
-
-constexpr uint32_t blit_game_magic = 0x54494C42; // "BLIT"
-
-struct BlitGameHeader {
-  uint32_t magic;
-
-  uint32_t render;
-  uint32_t tick;
-  uint32_t init;
-
-  uint32_t end;
-  uint32_t start;
-};
-
-// missing the "BLITMETA" header
-#pragma pack(push, 1)
-struct RawMetadata
-{
-    uint16_t length;
-    uint32_t crc32;
-    char datetime[16];
-    char title[25];
-    char description[129];
-    char version[17];
-    char author[17];
-};
-#pragma pack(pop)
 
 MemoryBus mem;
 ARMv6MCore cpuCore(mem);
@@ -43,51 +17,6 @@ static bool fileLoaded = false;
 static uint32_t homeDownTime = 0;
 
 static BlitGameHeader blitHeader;
-
-bool parseBlitMetadata(blit::File &file, RawMetadata &meta, uint32_t &metadataOffset)
-{
-    uint8_t buf[8];
-
-    file.read(0, 8, reinterpret_cast<char *>(buf));
-
-    if(memcmp(buf, "RELO", 4) != 0)
-    {
-        blit::debugf("Missing RELO header!\n");
-        return false;
-    }
-
-    uint32_t numRelocs = buf[4] | buf[5] << 8 | buf[6] << 16 | buf[7] << 24;
-
-    uint32_t relocsEnd = numRelocs * 4 + 8;
-
-    // read header
-    file.read(relocsEnd, sizeof(blitHeader), reinterpret_cast<char *>(&blitHeader));
-
-    if(blitHeader.magic != blit_game_magic)
-    {
-        blit::debugf("Incorrect blit header magic!\n");
-        return false;
-    }
-
-    uint32_t length = blitHeader.end - 0x90000000;
-
-    // read metadata
-    auto offset = relocsEnd + length;
-
-    file.read(offset, 8, reinterpret_cast<char *>(buf));
-
-    if(memcmp(buf, "BLITMETA", 8) != 0)
-    {
-        blit::debugf("Incorrect metadata header!\n");
-        return false;
-    }
-
-    metadataOffset = length;
-
-    file.read(offset + 8, sizeof(meta), reinterpret_cast<char *>(&meta));
-
-    return true;
-}
 
 static bool parseBlit(blit::File &file)
 {
@@ -102,11 +31,15 @@ static bool parseBlit(blit::File &file)
     // (so we don't have to apply relocs)
     auto flashPtr = mem.mapAddress(0x90000000);
 
+    // re-read headers
     uint8_t buf[8];
     file.read(0, 8, reinterpret_cast<char *>(buf));
     uint32_t numRelocs = buf[4] | buf[5] << 8 | buf[6] << 16 | buf[7] << 24;
     uint32_t relocsEnd = numRelocs * 4 + 8;
 
+    file.read(relocsEnd, sizeof(blitHeader), reinterpret_cast<char *>(&blitHeader));
+
+    // read data
     file.read(relocsEnd, length, reinterpret_cast<char *>(flashPtr));
 
     return true;

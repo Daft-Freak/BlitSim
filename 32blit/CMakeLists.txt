@@ -5,6 +5,7 @@ endif()
 blit_executable(BlitSim
     API.cpp
     Main.cpp
+    Metadata.cpp
     RemoteFiles.cpp
 )
 #blit_assets_yaml(DaftBoy32 assets.yml)
