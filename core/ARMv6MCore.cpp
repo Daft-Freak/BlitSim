@@ -2948,6 +2948,18 @@ void ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
                             loReg(dReg) = ((loReg(mReg) & 0xFF00FF00) >> 8) | ((loReg(mReg) & 0x00FF00FF) << 8);
                             return;
                         }
+                        case 2: // RBIT
+                        {
+                            auto val = loReg(mReg);
+                            val = ((val >>  1) & 0x55555555) | ((val & 0x55555555) <<  1);
+                            val = ((val >>  2) & 0x33333333) | ((val & 0x33333333) <<  2);
+                            val = ((val >>  4) & 0x0F0F0F0F) | ((val & 0x0F0F0F0F) <<  4);
+                            val = ((val >>  8) & 0x00FF00FF) | ((val & 0x00FF00FF) <<  8);
+                            val = ( val >> 16              ) | ( val               << 16);
+
+                            loReg(dReg) = val;
+                            return;
+                        }
                     }
                     break;
                 }
