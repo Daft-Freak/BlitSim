@@ -1,5 +1,9 @@
 #include <cstring>
 
+#ifdef __EMSCRIPTEN__
+#include <emscripten/emscripten.h>
+#endif
+
 #include "32blit.hpp"
 #include "engine/api_private.hpp"
 
@@ -21,6 +25,7 @@ uint32_t metadataOffset;
 struct FileData
 {
     void *fh; // real handle
+    int mode;
     bool isRemote;
 };
 
@@ -144,7 +149,7 @@ void apiCallback(int index, uint32_t *regs)
 
             if(ret)
             {
-                fileMap.emplace(nextFileId, FileData{ret, isRemote});
+                fileMap.emplace(nextFileId, FileData{ret, mode, isRemote});
                 regs[0] = nextFileId++;
             }
             else
@@ -185,7 +190,18 @@ void apiCallback(int index, uint32_t *regs)
             if(file.isRemote)
                 regs[0] = closeRemoteFile(file.fh);
             else
+            {
                 regs[0] = api.close_file(file.fh);
+#ifdef __EMSCRIPTEN__
+                if(file.mode & OpenMode::write)
+                {
+                    // TODO: we only have persistance on /libsdl
+                    EM_ASM(
+                        FS.syncfs(function(err) {});
+                    );
+                }
+#endif
+            }
             break;
         }
 
