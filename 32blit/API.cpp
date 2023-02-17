@@ -9,6 +9,7 @@
 
 #include "API.h"
 
+#include "Metadata.h"
 #include "RemoteFiles.h"
 
 #include "32blitAPI.h"
@@ -36,6 +37,14 @@ static uint32_t waveChannelData[CHANNEL_COUNT][2]; // data/callback
 
 static bool fileInTemp = false;
 
+struct TypeHandler
+{
+    std::string filename;
+    uint32_t metadataOffset;
+};
+
+static std::map<std::string, TypeHandler> typeHandlers;
+
 // screen speed hacks
 static uint32_t gameScreenPtr;
 static uint32_t origPBF, origBBF;
@@ -49,6 +58,9 @@ const uint32_t channelsAddr = 0x30000840; // (1504 bytes (188 * 8))
 const uint32_t tmpAddr      = 0x30000E40; // (1024+ bytes)
 const uint32_t fbAddr = 0x3000FC00;
 
+// temp area in flash
+const unsigned int flashTmpSize = 4 * 1024 * 1024;
+const uint32_t flashTmpAddr = 0x90000000 + (32 * 1024 * 1024) - flashTmpSize;
 
 static void waveBufferCallback(blit::AudioChannel &channel)
 {
@@ -76,6 +88,59 @@ void apiInit()
 
     for(int i = 0; i < CHANNEL_COUNT; i++)
         blit::channels[i].user_data = waveChannelData[i];
+
+    // write the metadata for the handlers near the end of flash
+    uint32_t endAddr = flashTmpAddr; 
+
+    // list top-level blits
+    auto blits = blit::list_files("/", [](const blit::FileInfo &f){
+        auto dot = f.name.find_last_of('.');
+
+        if(dot == std::string::npos)
+            return false;
+
+        return f.name.compare(dot, f.name.length() - dot, ".blit") == 0;
+    });
+
+    for(auto &file : blits)
+    {
+        blit::File f(file.name);
+
+        RawMetadata meta;
+        uint32_t metaOffset;
+        if(!parseBlitMetadata(f, meta, metaOffset))
+            continue;
+        
+        // check for type metadata
+        char buf[8];
+        uint32_t offset = metaOffset + sizeof(RawMetadata) + 8;
+        f.read(metaOffset + sizeof(RawMetadata) + 8, 8, buf);
+
+        if(memcmp(buf, "BLITTYPE", 8) != 0)
+            continue;
+
+        RawTypeMetadata typeMeta;
+        offset += 8;
+        f.read(offset, sizeof(typeMeta), reinterpret_cast<char *>(&typeMeta));
+        offset += sizeof(typeMeta);
+
+        if(!typeMeta.num_filetypes)
+            continue;
+
+        // copy metadata
+        auto metaAddr = endAddr - meta.length;
+        f.read(metaOffset, meta.length, reinterpret_cast<char *>(mem.mapAddress(metaAddr)));
+        endAddr = metaAddr;
+
+        // check for filetypes
+        for(int i = 0; i < typeMeta.num_filetypes; i++)
+        {
+            f.read(offset, 5, buf);
+            offset += 5;
+            blit::debugf("Setting %s as handler for %s\n", meta.title, buf);
+            typeHandlers.emplace(buf, TypeHandler{file.name, metaAddr});
+        }
+    }
 }
 
 void apiCallback(int index, uint32_t *regs)
@@ -353,8 +418,17 @@ void apiCallback(int index, uint32_t *regs)
         }
 
         case 26: // get_type_handler_metadata
-            regs[0] = 0;
+        {
+            auto filetype = reinterpret_cast<char *>(mem.mapAddress(regs[0]));
+            auto it = typeHandlers.find(filetype);
+
+            if(it != typeHandlers.end())
+                regs[0] = it->second.metadataOffset;
+            else
+                regs[0] = 0;
+
             break;
+        }
 
         case 27: // get_launch_path
             regs[0] = 0;
@@ -378,19 +452,17 @@ void apiCallback(int index, uint32_t *regs)
             auto sizePtr = regs[1];
 
             regs[0] = 0;
-            unsigned int tmpSize = 4 * 1024 * 1024;
-            uint32_t tmpAddr = 0x90000000 + (32 * 1024 * 1024) - tmpSize;
 
             File f{std::string(filename)};
             auto fileLen = f.get_length();
 
-            if (fileLen <= tmpSize && !fileInTemp)
+            if (fileLen <= flashTmpSize && !fileInTemp)
             {
-                f.read(0, fileLen, reinterpret_cast<char *>(mem.mapAddress(tmpAddr)));
+                f.read(0, fileLen, reinterpret_cast<char *>(mem.mapAddress(flashTmpAddr)));
 
                 mem.write<uint32_t>(sizePtr, fileLen);
 
-                regs[0] = tmpAddr;
+                regs[0] = flashTmpAddr;
                 fileInTemp = true;
             }
             else

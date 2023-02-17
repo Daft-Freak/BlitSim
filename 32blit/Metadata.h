@@ -30,4 +30,13 @@ struct RawMetadata
 };
 #pragma pack(pop)
 
+// "BLITTYPE"
+struct RawTypeMetadata
+{
+    char category[17];
+    char url[129];
+    uint8_t num_filetypes;
+    char filetypes[][5];
+};
+
 bool parseBlitMetadata(blit::File &file, RawMetadata &meta, uint32_t &metadataOffset);
