@@ -23,8 +23,6 @@ static bool parseBlit(blit::File &file)
     RawMetadata meta;
     parseBlitMetadata(file, meta, metadataOffset);
 
-    auto length = metadataOffset + meta.length + 10;
-
     blit::debugf("Loading \"%s\" %s by %s\n", meta.title, meta.version, meta.author);
 
     // write directly to start of qspi flash
@@ -38,6 +36,9 @@ static bool parseBlit(blit::File &file)
     uint32_t relocsEnd = numRelocs * 4 + 8;
 
     file.read(relocsEnd, sizeof(blitHeader), reinterpret_cast<char *>(&blitHeader));
+
+    metadataOffset -= relocsEnd;
+    auto length = metadataOffset + meta.length + 10;
 
     // read data
     file.read(relocsEnd, length, reinterpret_cast<char *>(flashPtr));

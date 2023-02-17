@@ -43,7 +43,7 @@ bool parseBlitMetadata(blit::File &file, RawMetadata &meta, uint32_t &metadataOf
         return false;
     }
 
-    metadataOffset = length;
+    metadataOffset = relocsEnd + length;
 
     file.read(offset + 8, sizeof(meta), reinterpret_cast<char *>(&meta));
 
