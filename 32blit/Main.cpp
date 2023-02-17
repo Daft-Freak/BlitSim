@@ -139,6 +139,7 @@ void init()
     else if(blit::file_exists("launcher.blit"))
         fileLoaded = openFile("launcher.blit");
 
+    apiInit();
     initRemoteFiles();
 }
 
