@@ -20,6 +20,7 @@ extern ARMv6MCore cpuCore;
 extern MemoryBus mem;
 
 std::string launchFile;
+static std::string launchPath;
 
 uint32_t metadataOffset;
 
@@ -414,6 +415,22 @@ void apiCallback(int index, uint32_t *regs)
         case 24: // launch
         {
             launchFile = reinterpret_cast<char *>(mem.mapAddress(regs[0]));
+            launchPath = "";
+
+            auto ext = std::string(launchFile.substr(launchFile.find_last_of('.') + 1));
+            for(auto &c : ext)
+                c = tolower(c);
+
+            if(ext != "blit")
+            {
+                auto it = typeHandlers.find(ext);
+                if(it != typeHandlers.end())
+                {
+                    launchPath = launchFile;
+                    launchFile = it->second.filename;
+                }
+            }
+
             break;
         }
 
@@ -431,8 +448,18 @@ void apiCallback(int index, uint32_t *regs)
         }
 
         case 27: // get_launch_path
-            regs[0] = 0;
+        {
+            if(!launchPath.empty())
+            {
+                auto addr = 0x38800000; // backup ram (right region, wrong offset)
+                strncpy(reinterpret_cast<char *>(mem.mapAddress(addr)), launchPath.c_str(), 256);
+                regs[0] = addr;
+            }
+            else
+                regs[0] = 0;
+
             break;
+        }
 
         case 28: // is_multiplayer_connected
             regs[0] = api.is_multiplayer_connected();
