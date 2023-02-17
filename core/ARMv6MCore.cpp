@@ -3535,9 +3535,9 @@ void ARMv6MCore::doVFPDataProcessing(uint32_t opcode, uint32_t pc, bool dWidth)
                         {
                             double f;
                             if(isUnsigned)
-                                f = static_cast<double>(fixed) / (1 << fracBits);
+                                f = static_cast<double>(fixed) / (1u << fracBits);
                             else
-                                f = static_cast<double>(static_cast<int32_t>(fixed)) / (1 << fracBits);
+                                f = static_cast<double>(static_cast<int32_t>(fixed)) / (1u << fracBits);
 
                             dReg(d) = f;
                         }
@@ -3545,9 +3545,9 @@ void ARMv6MCore::doVFPDataProcessing(uint32_t opcode, uint32_t pc, bool dWidth)
                         {
                             float f;
                             if(isUnsigned)
-                                f = static_cast<float>(fixed) / (1 << fracBits);
+                                f = static_cast<float>(fixed) / (1u << fracBits);
                             else
-                                f = static_cast<float>(static_cast<int32_t>(fixed)) / (1 << fracBits);
+                                f = static_cast<float>(static_cast<int32_t>(fixed)) / (1u << fracBits);
 
                             sReg(d) = f;
                         }
