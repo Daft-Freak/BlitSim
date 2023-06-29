@@ -1926,7 +1926,7 @@ void ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
 
                 if(dWidth) // VMOV to scalar
                 {
-                    assert(!b);
+                    //assert(!b);
                 }
                 else if(a == 7) // VMSR/VMRS
                 {
