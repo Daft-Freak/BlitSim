@@ -553,6 +553,28 @@ void apiCallback(int index, uint32_t *regs)
             break;
         }
 
+        case 35: // list_installed_games
+        {
+            auto callback = regs[0];
+            auto invoker = mem.read<uint32_t>(callback + 12);
+
+            auto outPtr = reinterpret_cast<uint32_t *>(mem.mapAddress(tmpAddr)); // stack allocate?
+
+            // get size
+            auto metadataAddr = 0x90000000 + metadataOffset;
+            auto metadataSize = *reinterpret_cast<uint16_t *>(mem.mapAddress(metadataAddr + 8));
+
+            // claim only current blit installed
+            outPtr[0] = 0x90000000; // ptr
+            outPtr[1] = 0; // block
+            outPtr[2] =  metadataOffset + metadataSize + 10; // size
+
+            regs[2] = tmpAddr + 4;
+            regs[3] = tmpAddr + 8;
+            cpuCore.runCallLocked(invoker, callback, tmpAddr);
+            break;
+        }
+
         case 2048: // patched screen.pbf
         {
             if(mem.read<uint32_t>(gameScreenPtr + 44)) // mask

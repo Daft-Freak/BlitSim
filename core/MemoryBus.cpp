@@ -88,6 +88,8 @@ void MemoryBus::reset()
     api->get_metadata = 0x08BA0043;
 
     api->set_screen_mode_format = 0x08BA0045;
+
+    api->list_installed_games = 0x08BA0047;
 }
 
 template<class T>
@@ -152,7 +154,8 @@ void MemoryBus::write(uint32_t addr, T data)
 
         case Region_QSPI:
         case Region_QSPI2:
-            doWrite<T>(qspiFlash, addr, data);
+            printf("QSPI W %08X = %08X\n", addr, data);
+            //doWrite<T>(qspiFlash, addr, data);
             return;
     }
 }

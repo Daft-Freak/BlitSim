@@ -216,6 +216,9 @@ namespace blithw {
         uint32_t set_raw_cdc_enabled;
         uint32_t cdc_write;
         uint32_t cdc_read;
+
+        // another launcher API
+        uint32_t list_installed_games;
     };
     #pragma pack(pop)
 }
