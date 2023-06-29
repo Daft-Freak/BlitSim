@@ -14,7 +14,7 @@ else()
 endif()
 
 option(BUILD_32BLIT "Build 32blit UI" ON)
-option(BUILD_SDL "Build minimal SDL UI" ON)
+option(BUILD_SDL "Build minimal SDL UI" OFF)
 
 add_subdirectory(core)
 
