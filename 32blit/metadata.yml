@@ -1,0 +1,11 @@
+title: BlitSim
+author: Daft_Freak
+description: Runs .blit files
+version: v0.0.1
+icon:
+  file: icon.png
+splash:
+  file: splash.png
+category: emulator
+url: https://github.com/Daft-Freak/BlitSim
+filetypes: ["blit"] # + anything that has a .blit to handle it

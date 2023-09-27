@@ -11,7 +11,7 @@ blit_executable(BlitSim
     RemoteFiles.cpp
 )
 #blit_assets_yaml(DaftBoy32 assets.yml)
-#blit_metadata(DaftBoy32 metadata.yml)
+blit_metadata(BlitSim metadata.yml)
 
 target_link_libraries(BlitSim BlitSimCore)
 
