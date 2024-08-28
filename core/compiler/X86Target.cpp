@@ -697,10 +697,10 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                 if(addrSize == 32)
                 {
-                    auto dst = checkReg32(instr.dst[0]);
+                    auto dst = checkReg32(instr.dst[0], {}, instr.opcode == GenOpcode::Load4);
                     auto addr = checkValue32(instr.src[0], Value_Immediate | Value_Memory);
 
-                    if(addr.index() && dst)
+                    if(addr.index())
                     {
                         // zero-extend if not 8 bit dest (a temp)
                         bool zeroExtend = instr.opcode == GenOpcode::Load && sourceInfo.registers[instr.dst[0]].size != 8;
@@ -733,7 +733,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                         builder.call(func - builder.getPtr()); // do call
 
-                        if(instr.opcode == GenOpcode::Load)
+                        if(instr.opcode == GenOpcode::Load && dst)
                         {
                             auto dst8 = static_cast<Reg8>(*dst);
                             // 8-bit dest
@@ -752,23 +752,25 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         else
                         {
                             // 16/32-bit dest
-                            bool saved = isCallSaved(*dst);
+                            bool saved = dst && isCallSaved(*dst);
                             if(saved) // restore everything except RAX
                                 callRestoreIfNeeded(builder, static_cast<Reg32>(callSavedRegs[1]), needCallRestore);
 
-                            auto dst32 = static_cast<Reg32>(static_cast<int>(*dst) & 0xF); // bit of a hack
-
                             if(instr.opcode == GenOpcode::Load2 && (instr.flags & GenOp_SignExtend))
-                                builder.movsx(dst32, Reg16::AX);
-                            else if(dst32 != Reg32::EAX)
-                                builder.mov(dst32, Reg32::EAX);
-
-                            if(dst32 == Reg32::EAX)
+                                builder.movsx(*dst, Reg16::AX);
+                            else if(dst)
                             {
-                                // discard old RAX
-                                builder.pop(Reg64::R10);
-                                needCallRestore = 0;
+                                if(*dst == Reg32::EAX)
+                                {
+                                    // discard old RAX
+                                    builder.pop(Reg64::R10);
+                                    needCallRestore = 0;
+                                }
+                                else
+                                    builder.mov(*dst, Reg32::EAX);
                             }
+                            else // "extra"/high reg
+                                storeExtraReg32(instr.dst[0], Reg32::EAX);
                         }
                     }
                 }
