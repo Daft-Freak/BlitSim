@@ -30,6 +30,12 @@ bool parseBlitMetadata(blit::File &file, RawMetadata &meta, uint32_t &metadataOf
         return false;
     }
 
+    if(blitHeader.device_id != BlitDevice::STM32H7_32BlitOld && blitHeader.device_id != BlitDevice::STM32H7_32Blit)
+    {
+        blit::debugf("Incorrect blit device id!\n");
+        return false;
+    }
+
     uint32_t length = blitHeader.end - 0x90000000;
 
     // read metadata
