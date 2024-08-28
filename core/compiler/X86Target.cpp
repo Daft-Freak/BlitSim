@@ -241,66 +241,14 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
     int needCallRestore = 0;
 
 
-    // cycle executed sync
-    int cyclesThisInstr = 0;
-    int delayedCyclesExecuted = 0;
-    bool stackCycleCount = false; // cycle count stored to stack
-
-    auto cycleExecuted = [this, &builder, &needCallRestore, &blockInfo, &cyclesThisInstr, &delayedCyclesExecuted, &stackCycleCount]()
-    {
-        assert(!stackCycleCount);
-
-        cyclesThisInstr += sourceInfo.cycleMul;
-
-        // delay/inline cycle updates if possible
-        delayedCyclesExecuted += sourceInfo.cycleMul;
-    };
-
-    auto syncCyclesExecuted = [this, &builder, &delayedCyclesExecuted, &stackCycleCount]()
-    {
-        if(!delayedCyclesExecuted)
-            return;
-
-        assert(!stackCycleCount);
-
-        assert(delayedCyclesExecuted < 127);
-        auto cpuPtrInt = reinterpret_cast<uintptr_t>(cpuPtr);
-
-        int8_t i8Cycles = delayedCyclesExecuted;
-
-        // we don't update cyclesToRun here, do it after returning instead
-        int offset = reinterpret_cast<uintptr_t>(sourceInfo.cycleCount) - cpuPtrInt;
-        builder.addD({cpuPtrReg, offset}, i8Cycles);
-
-        delayedCyclesExecuted = 0;
-    };
-
-    auto writeCycleCountToStack = [this, &builder, &needCallRestore, &cyclesThisInstr, &delayedCyclesExecuted, &stackCycleCount](int &instrCycles)
-    {
-        if(!stackCycleCount)
-        {
-            assert(cyclesThisInstr == delayedCyclesExecuted);
-            builder.mov({Reg64::RSP, needCallRestore * 8}, uint32_t(cyclesThisInstr + instrCycles));
-
-            cyclesThisInstr = delayedCyclesExecuted = 0;
-            instrCycles = 0;
-            stackCycleCount = true;
-        }
-        else
-            assert(!cyclesThisInstr && !delayedCyclesExecuted);
-    };
-
     // load/store helpers
-    auto setupMemAddr = [this, &blockInfo, &builder, &syncCyclesExecuted](std::variant<std::monostate, RMOperand, uint32_t> addr, int addrSize, uint8_t addrIndex)
+    auto setupMemAddr = [this, &blockInfo, &builder](std::variant<std::monostate, RMOperand, uint32_t> addr, int addrSize, uint8_t addrIndex)
     {
         if(!addr.index())
             return; // err should already be set
 
         if(std::holds_alternative<RMOperand>(addr))
         {
-            if(!sourceInfo.shouldSyncForRegIndex || sourceInfo.shouldSyncForRegIndex(addrIndex, blockInfo))
-                syncCyclesExecuted();
-
             auto addrReg = std::get<RMOperand>(addr);
 
             builder.mov(argumentRegs32[1], addrReg);
@@ -309,9 +257,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
         {
             auto immAddr = std::get<uint32_t>(addr);
             assert(addrSize == 32);
-
-            if(!sourceInfo.shouldSyncForAddress || sourceInfo.shouldSyncForAddress(immAddr))
-                syncCyclesExecuted();
 
             builder.mov(argumentRegs32[1], immAddr);
         }
@@ -435,9 +380,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
         // update start pointer if the last op was the end of an emulated op
         if(newEmuOp)
             opStartPtr = builder.getPtr();
-
-        // get cycles
-        int instrCycles = instr.cycles;
 
         bool err = false;
 
@@ -770,8 +712,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         // maybe push
                         callSaveIfNeeded(builder, needCallRestore);
 
-                        bool needCyclesSeq = sourceInfo.readMem8;
-
                         setupMemAddr(addr, addrSize, instr.src[0]);
 
                         uint8_t *func = nullptr;
@@ -790,15 +730,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         }
 
                         builder.mov(argumentRegs64[0], cpuPtrReg); // cpu/this ptr
-
-                        if(needCyclesSeq)
-                        {
-                            // cycle count from stack
-                            builder.lea(argumentRegs64[2], {Reg64::RSP, needCallRestore * 8});
-                            writeCycleCountToStack(instrCycles);
-
-                            builder.mov(argumentRegs32[3], instr.flags >> 8); // flags
-                        }
 
                         builder.call(func - builder.getPtr()); // do call
 
@@ -863,13 +794,8 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                     if(addr.index() && checkReg(instr.src[1], dataSize, true))
                     {
-                        bool updateCycles = instr.flags & GenOp_UpdateCycles;
-                        if(updateCycles)
-                            callRestoreIfNeeded(builder, Reg16::DI, needCallRestore);
-
                         callSaveIfNeeded(builder, needCallRestore);
 
-                        bool needCyclesSeq = sourceInfo.writeMem8;
 
 #ifndef _WIN32
                         // setup addr first (data writes DX)
@@ -926,22 +852,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         setupMemAddr(addr, addrSize, instr.src[0]);
 #endif
 
-                        if(needCyclesSeq)
-                        {
-                            // FIXME: win32
-
-                            // cycle count from stack
-                            builder.lea(argumentRegs64[3], {Reg64::RSP, needCallRestore * 8});
-                            writeCycleCountToStack(instrCycles);
-
-                            builder.mov(argumentRegs32[4], instr.flags >> 8);
-
-                            if(updateCycles)
-                                builder.mov(argumentRegs32[5], Reg32::EDI); // cycle count
-                        }
-                        else if(updateCycles)
-                            builder.mov(argumentRegs32[3], Reg32::EDI); // cycle count
-
                         // select function to call
                         uint8_t *func = nullptr;
 
@@ -960,13 +870,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                         builder.mov(argumentRegs64[0], cpuPtrReg); // cpu/this ptr
                         builder.call(func - builder.getPtr()); // do call
-
-                        if(updateCycles)
-                        {
-                            // just pop EDI... then overrwrite it
-                            callRestoreIfNeeded(builder, Reg16::DI, needCallRestore);
-                            builder.mov(Reg32::EDI, Reg32::EAX);
-                        }
                     }
                 }
                 else
@@ -1566,8 +1469,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         // condition
                         if(condition != GenCondition::Always)
                         {
-                            syncCyclesExecuted();
-
                             std::variant<Reg8, Reg32> f;
 
                             if(regSize == 32)
@@ -1670,14 +1571,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.jcc(Condition::E, 1); // patch later
                         }
 
-                        // need to sync cycles *before* the jump out
-                        if(instrCycles)
-                        {
-                            while(instrCycles--)
-                                cycleExecuted();
-                        }
-                        syncCyclesExecuted();
-
                         callRestoreIfNeeded(builder, needCallRestore); // we might have just done another cycleExecuted call
 
                         // set pc if we're exiting
@@ -1694,12 +1587,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                                     builder.mov(pcReg32, reg32);
                             }
                         }
-                        else // or sub cycles early (we jump past the usual code that does this)
-                            builder.sub(Reg32::EDI, static_cast<int8_t>(cyclesThisInstr));
-
-                        // don't update twice for unconditional branches
-                        if(condition == GenCondition::Always)
-                            cyclesThisInstr = 0;
 
                         auto it = std::holds_alternative<uint32_t>(src) ? branchTargets.find(std::get<uint32_t>(src)) : branchTargets.end();
 
@@ -1753,28 +1640,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
             break;
         }
 
-        // sync cycle count from stack at the end of the op, or if something updates cycles before that
-        if(stackCycleCount && (instrCycles || instr.len || (instIt + 1)->opcode == GenOpcode::Jump))
-        {
-            callRestoreIfNeeded(builder, Reg16::DI, needCallRestore);
-
-            // add/sub the cycles from the stack
-            builder.mov(Reg32::R8D, {Reg64::RSP, needCallRestore * 8});
-
-            int offset = reinterpret_cast<uintptr_t>(sourceInfo.cycleCount) - reinterpret_cast<uintptr_t>(cpuPtr);
-            builder.add({cpuPtrReg, offset}, Reg32::R8D);
-
-            builder.sub(Reg32::EDI, Reg32::R8D);
-            stackCycleCount = false;
-        }
-
-        // additional cycles
-        if(instrCycles > 0)
-        {
-            while(instrCycles--)
-                cycleExecuted();
-        }
-
+      
         // check if this is the end of the source instruction (pc incremented)
         newEmuOp = instr.len != 0;
 
@@ -1783,7 +1649,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
             // ending on a non-jump probably means this was an incomplete block
             // add an exit
             callRestoreIfNeeded(builder, needCallRestore);
-            syncCyclesExecuted();
             builder.mov(pcReg32, pc + sourceInfo.pcPrefetch);
             builder.jmp(exitPtr - builder.getPtr());
         }
@@ -1798,20 +1663,8 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
         {
             // might exit, sync
             callRestoreIfNeeded(builder, needCallRestore);
-            syncCyclesExecuted();
-
-            // cycles -= executed
-            if(cyclesThisInstr) // 0 means we already did the sub
-                builder.sub(Reg32::EDI, static_cast<int8_t>(cyclesThisInstr));
 
             lastInstrCycleCheck = builder.getPtr(); // save in case the next instr is a branch target
-
-            // if <= 0 exit
-            builder.jcc(Condition::G, 10);
-            builder.mov(pcReg32, pc + sourceInfo.pcPrefetch);
-            builder.call(saveAndExitPtr - builder.getPtr());
-
-            cyclesThisInstr = 0;
         }
 
         if(newEmuOp)
