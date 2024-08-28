@@ -575,6 +575,33 @@ void apiCallback(int index, uint32_t *regs)
             break;
         }
 
+        case 36: // can_launch
+        {
+            std::string_view path = reinterpret_cast<char *>(mem.mapAddress(regs[0]));
+
+            auto ext = std::string(path.substr(path.find_last_of('.') + 1));
+            for(auto &c : ext)
+                c = tolower(c);
+
+            regs[0] = int(CanLaunchResult::UnknownType);
+
+            // assume flashed is compatible (it's the thing that's running...)
+            if(path.substr(0, 7) == "flash:/")
+                regs[0] = int(CanLaunchResult::Success);
+            else if(ext == "blit")
+            {
+                // TODO: check header
+                regs[0] = int(CanLaunchResult::Success);
+            }
+            else
+            {
+                if(typeHandlers.count(ext))
+                    regs[0] = int(CanLaunchResult::Success);
+            }
+
+            break;
+        }
+
         case 2048: // patched screen.pbf
         {
             if(mem.read<uint32_t>(gameScreenPtr + 44)) // mask
