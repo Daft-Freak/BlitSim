@@ -347,13 +347,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
             else
             {
                 // this is the first instruction, so make a cycle check for the branch to go to
-                builder.jmp(12);
                 lastInstrCycleCheck = builder.getPtr();
-
-                // if <= 0 exit
-                builder.jcc(Condition::G, 10);
-                builder.mov(pcReg32, pc + sourceInfo.pcPrefetch);
-                builder.call(saveAndExitPtr - builder.getPtr());
 
                 // TODO: this is the first instruction
                 branchTargets.emplace(pc, lastInstrCycleCheck);
@@ -1664,9 +1658,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
         bool shouldSkip = nextInstr == endInstr || ((instr.flags & GenOp_Exit) && !isCond && !(nextInstr->flags & GenOp_BranchTarget));
         if(newEmuOp && !shouldSkip)
         {
-            // might exit, sync
-            callRestoreIfNeeded(builder, needCallRestore);
-
             lastInstrCycleCheck = builder.getPtr(); // save in case the next instr is a branch target
         }
 
