@@ -38,10 +38,10 @@ private:
 
     bool needStackAlign() const;
 
-    bool isCallSaved(Reg16 reg) const;
+    bool isCallSaved(Reg32 reg) const;
     bool isCallSaved(Reg8 reg) const;
 
-    int callSaveIndex(Reg16 reg) const;
+    int callSaveIndex(Reg32 reg) const;
     int callSaveIndex(Reg8 reg) const;
 
     void callSaveIfNeeded(X86Builder &builder, int &saveState) const;
@@ -49,7 +49,7 @@ private:
     void callRestore(X86Builder &builder, int &saveState, int toIndex) const;
     void callRestore(X86Builder &builder, Reg8 dstReg, bool zeroExtend, bool signExtend) const;
     void callRestoreIfNeeded(X86Builder &builder, int &saveState) const;
-    void callRestoreIfNeeded(X86Builder &builder, std::variant<std::monostate, Reg16, uint16_t> val, int &saveState) const;
+    void callRestoreIfNeeded(X86Builder &builder, std::variant<std::monostate, Reg32, uint16_t> val, int &saveState) const;
     void callRestoreIfNeeded(X86Builder &builder, std::variant<std::monostate, Reg8, uint8_t> val, int &saveState) const;
 
     SourceInfo sourceInfo;
