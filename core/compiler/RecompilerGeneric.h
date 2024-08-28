@@ -143,8 +143,6 @@ struct SourceInfo
     uint8_t pcPrefetch; // offset to add on exit for prefetch
     uint16_t pcOffset;
 
-    uint8_t cycleMul; // cycles to add for each cycle in an op
-
     int extraCPUOffsets[5]; // source specific ops
 
     bool (*shouldSyncForAddress)(uint16_t addr); // return true to sync cycle count before accessing this address
@@ -156,15 +154,13 @@ struct SourceInfo
     bool *exitCallFlag;
     uint8_t **savedExitPtr;
 
-    uint32_t *cycleCount;
+    uint8_t (*readMem8)(void *cpu, uint32_t addr);
+    uint32_t (*readMem16)(void *cpu, uint32_t addr); // returning 32-bit here is deliberate
+    uint32_t (*readMem32)(void *cpu, uint32_t addr);
 
-    uint8_t (*readMem8)(void *cpu, uint32_t addr, int &cycles, uint8_t flags);
-    uint32_t (*readMem16)(void *cpu, uint32_t addr, int &cycles, uint8_t flags); // returning 32-bit here is deliberate
-    uint32_t (*readMem32)(void *cpu, uint32_t addr, int &cycles, uint8_t flags);
-
-    int (*writeMem8)(void *cpu, uint32_t addr, uint8_t data, int &cycles, uint8_t flags, int cyclesToRun);
-    int (*writeMem16)(void *cpu, uint32_t addr, uint16_t data, int &cycles, uint8_t flags, int cyclesToRun);
-    int (*writeMem32)(void *cpu, uint32_t addr, uint32_t data, int &cycles, uint8_t flags, int cyclesToRun);
+    void (*writeMem8)(void *cpu, uint32_t addr, uint8_t data);
+    void (*writeMem16)(void *cpu, uint32_t addr, uint16_t data);
+    void (*writeMem32)(void *cpu, uint32_t addr, uint32_t data);
 };
 
 void analyseGenBlock(uint32_t pc, uint32_t endPC, GenBlockInfo &blockInfo, const SourceInfo &sourceInfo);
