@@ -1264,7 +1264,31 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 pc += 2;
 
                 auto op1 = opcode32 >> 27;
-                if(op1 == 0b11110)
+
+                if(op1 == 0b11101)
+                {
+                    if(opcode32 & (1 << 26)) // coprocessor
+                    {
+                        printf("unhandled op in convertToGeneric %08X (coproc)\n", opcode32 & 0xFF000000);
+                        done = true;
+                    }
+                    else if(opcode32 & (1 << 25)) // data processing (shifted register)
+                    {
+                        printf("unhandled op in convertToGeneric %08X (dp shift)\n", opcode32 & 0xFF000000);
+                        done = true;
+                    }
+                    else if(opcode32 & (1 << 22)) // load/store dual or exclusive
+                    {
+                        printf("unhandled op in convertToGeneric %08X (l/s d/e)\n", opcode32 & 0xFF000000);
+                        done = true;
+                    }
+                    else // load/store multiple
+                    {
+                        printf("unhandled op in convertToGeneric %08X (l/s m)\n", opcode32 & 0xFF000000);
+                        done = true;
+                    }
+                }
+                else if(op1 == 0b11110)
                 {
                     if(opcode32 & (1 << 15))
                     {
@@ -1384,9 +1408,57 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             }
                         }
                     }
+                    else if(opcode32 & (1 << 25)) // data processing (plain immediate)
+                    {
+                        printf("unhandled op in convertToGeneric %08X (dp imm)\n", opcode32 & 0xFF000000);
+                        done = true;
+                    }
                     else
                     {
-                        printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF8008000);
+                        printf("unhandled op in convertToGeneric %08X (dp mod imm)\n", opcode32 & 0xFF008000);
+                        done = true;
+                    }
+                }
+                else if(op1 == 0b11111)
+                {
+                    if(opcode32 & (1 << 26)) // coprocessor
+                    {
+                        printf("unhandled op in convertToGeneric %08X (coproc)\n", opcode32 & 0xFF000000);
+                        done = true;
+                    }
+                    else if((opcode32 & 0x3800000) == 0x3800000) // long multiply (accumulate), divide
+                    {
+                        printf("unhandled op in convertToGeneric %08X (lmuldiv)\n", opcode32 & 0xFF000000);
+                        done = true;
+                    }
+                    else if((opcode32 & 0x3800000) == 0x3000000) // multiply (accumulate), diff
+                    {
+                        printf("unhandled op in convertToGeneric %08X (muldiff)\n", opcode32 & 0xFF000000);
+                        done = true;
+                    }
+                    else if(opcode32 & (1 << 25)) // data processing (register)
+                    {
+                        printf("unhandled op in convertToGeneric %08X (dp reg)\n", opcode32 & 0xFF000000);
+                        done = true;
+                    }
+                    else if((opcode32 & 0x700000) == 0x500000) // load word
+                    {
+                        printf("unhandled op in convertToGeneric %08X (load w)\n", opcode32 & 0xFF000000);
+                        done = true;
+                    }
+                    else if((opcode32 & 0x700000) == 0x300000) // load halfword, memory hints
+                    {
+                        printf("unhandled op in convertToGeneric %08X (load h/hint)\n", opcode32 & 0xFF000000);
+                        done = true;
+                    }
+                    else if((opcode32 & 0x700000) == 0x100000) // load byte, memory hints
+                    {
+                        printf("unhandled op in convertToGeneric %08X (load b/hint)\n", opcode32 & 0xFF000000);
+                        done = true;
+                    }
+                    else // store single data item
+                    {
+                        printf("unhandled op in convertToGeneric %08X (store single)\n", opcode32 & 0xFF000000);
                         done = true;
                     }
                 }
