@@ -423,7 +423,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 if(auto reg = mapReg32(index))
                 {
                     found = true;
-                    saveIndex = callSaveIndex(static_cast<Reg16>(*reg));
+                    saveIndex = callSaveIndex(*reg);
                 }
             }
 
@@ -468,7 +468,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 err = true;
             }
             else
-                callRestoreIfNeeded(builder, static_cast<Reg16>(*reg), needCallRestore);
+                callRestoreIfNeeded(builder, *reg, needCallRestore);
 
             return reg;
         };
@@ -697,7 +697,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                 if(addrSize == 32)
                 {
-                    auto dst = checkReg8(instr.dst[0]);
+                    auto dst = checkReg32(instr.dst[0]);
                     auto addr = checkValue32(instr.src[0], Value_Immediate | Value_Memory);
 
                     if(addr.index() && dst)
@@ -735,10 +735,11 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                         if(instr.opcode == GenOpcode::Load)
                         {
+                            auto dst8 = static_cast<Reg8>(*dst);
                             // 8-bit dest
                             if(isCallSaved(*dst))
                             {
-                                callRestore(builder, *dst, zeroExtend, instr.flags & GenOp_SignExtend);
+                                callRestore(builder, dst8, zeroExtend, instr.flags & GenOp_SignExtend);
                                 needCallRestore = 0;
                             }
                             else if(instr.flags & GenOp_SignExtend)
@@ -746,14 +747,14 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             else if(zeroExtend)
                                 builder.movzx(static_cast<Reg32>(*dst), Reg8::AL);
                             else
-                                builder.mov(*dst, Reg8::AL);
+                                builder.mov(dst8, Reg8::AL);
                         }
                         else
                         {
                             // 16/32-bit dest
                             bool saved = isCallSaved(*dst);
                             if(saved) // restore everything except RAX
-                                callRestoreIfNeeded(builder, static_cast<Reg16>(callSavedRegs[1]), needCallRestore);
+                                callRestoreIfNeeded(builder, static_cast<Reg32>(callSavedRegs[1]), needCallRestore);
 
                             auto dst32 = static_cast<Reg32>(static_cast<int>(*dst) & 0xF); // bit of a hack
 
@@ -1945,7 +1946,7 @@ bool X86Target::needStackAlign() const
     return !!(numSavedRegs % 2) != saveR15;
 }
 
-bool X86Target::isCallSaved(Reg16 reg) const
+bool X86Target::isCallSaved(Reg32 reg) const
 {
     return callSaveIndex(reg) != -1;
 }
@@ -1955,11 +1956,11 @@ bool X86Target::isCallSaved(Reg8 reg) const
     return callSaveIndex(reg) != -1;
 }
 
-int X86Target::callSaveIndex(Reg16 reg) const
+int X86Target::callSaveIndex(Reg32 reg) const
 {
     for(size_t i = 0; i < numSavedRegs; i++)
     {
-        if(reg == static_cast<Reg16>(callSavedRegs[i]))
+        if(reg == static_cast<Reg32>(callSavedRegs[i]))
             return static_cast<int>(i);
     }
     
@@ -1968,13 +1969,13 @@ int X86Target::callSaveIndex(Reg16 reg) const
 
 int X86Target::callSaveIndex(Reg8 reg) const
 {
-    Reg16 mappedReg = static_cast<Reg16>(reg);
+    Reg32 mappedReg = static_cast<Reg32>(reg);
     auto iReg = static_cast<int>(reg);
 
     if(iReg >= 16) // SPL/BPL/SIL/DIL
-        mappedReg = static_cast<Reg16>(iReg - 16);
+        mappedReg = static_cast<Reg32>(iReg - 16);
     else if(isXHReg(reg))
-        mappedReg = static_cast<Reg16>(iReg - 4);
+        mappedReg = static_cast<Reg32>(iReg - 4);
 
     return callSaveIndex(mappedReg);
 }
@@ -2095,12 +2096,12 @@ void X86Target::callRestoreIfNeeded(X86Builder &builder, std::variant<std::monos
         callRestore(builder, saveState, index);
 }
 
-void X86Target::callRestoreIfNeeded(X86Builder &builder, std::variant<std::monostate, Reg16, uint16_t> val, int &saveState) const
+void X86Target::callRestoreIfNeeded(X86Builder &builder, std::variant<std::monostate, Reg32, uint16_t> val, int &saveState) const
 {
-    if(!std::holds_alternative<Reg16>(val))
+    if(!std::holds_alternative<Reg32>(val))
         return;
 
-    auto index = callSaveIndex(std::get<Reg16>(val));
+    auto index = callSaveIndex(std::get<Reg32>(val));
 
     if(index != -1)
         callRestore(builder, saveState, index);
