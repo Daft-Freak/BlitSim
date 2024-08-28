@@ -90,6 +90,7 @@ void MemoryBus::reset()
     api->set_screen_mode_format = 0x08BA0045;
 
     api->list_installed_games = 0x08BA0047;
+    api->can_launch = 0x08BA0049;
 }
 
 template<class T>

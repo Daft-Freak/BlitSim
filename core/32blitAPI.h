@@ -106,7 +106,7 @@ namespace blithw {
 
     // using AllocateCallback = uint8_t *(*)(size_t);
 
-    constexpr uint16_t api_version_major = 0, api_version_minor = 1;
+    constexpr uint16_t api_version_major = 0, api_version_minor = 2;
 
     // template for screen modes
     struct SurfaceTemplate {
@@ -114,6 +114,10 @@ namespace blithw {
         Size bounds;
         PixelFormat format;
         uint32_t palette;
+
+        uint32_t pen_blend;
+        uint32_t blit_blend;
+        uint32_t pen_get;
     };
 
     // subset of Surface for API compat
@@ -135,6 +139,13 @@ namespace blithw {
 
         uint32_t mask; // unused
         uint32_t palette;
+    };
+
+    enum class CanLaunchResult {
+        Success = 0,
+        UnknownType,      /// no known handler for this file
+        InvalidFile,      /// file is not valid/doesn't exist
+        IncompatibleBlit, /// file is incompatible with this device
     };
 
     #pragma pack(push, 4)
@@ -219,6 +230,8 @@ namespace blithw {
 
         // another launcher API
         uint32_t list_installed_games;
+        // if launch is expected to succeed on this file
+        uint32_t can_launch;
     };
     #pragma pack(pop)
 }
