@@ -1243,16 +1243,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
             case 0xE: // format 18, unconditional branch
             {
-                if(opcode & (1 << 11))
-                {
-                    //  32-bit
-                    uint32_t opcode32 = opcode << 16 | *pcPtr++;
-                    pc += 2;
-                    printf("unhandled op in convertToGeneric %08X\n", opcode32);
-                    done = true;
-                    break;
-                }
-                else
+                if(!(opcode & (1 << 11)))
                 {
                     uint32_t offset = static_cast<int16_t>(opcode << 5) >> 4; // sign extend and * 2
                     addInstruction(loadImm(pc + 2 + offset));
@@ -1260,8 +1251,11 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
                     if(pc > maxBranch)
                         done = true;
+                        
+                    break;
                 }
-                break;
+                // otherwise 32-bit encoding
+                [[fallthrough]];
             }
 
             case 0xF: // 32-bit encoding
@@ -1269,126 +1263,137 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 uint32_t opcode32 = opcode << 16 | *pcPtr++;
                 pc += 2;
 
-                // decode
-                if((opcode32 & 0x18008000) != 0x10008000)
+                auto op1 = opcode32 >> 27;
+                if(op1 == 0b11110)
                 {
-                    done = true;
-                    break;
-                }
-
-                auto op1 = (opcode32 >> 20) & 0x7F;
-                auto op2 = (opcode32 >> 12) & 0x7;
-
-                if((op2 & 0b101) == 0b101) // BL
-                {
-                    auto imm11 = opcode32 & 0x7FF;
-                    auto imm10 = (opcode32 >> 16) & 0x3FF;
-
-                    auto s = opcode32 & (1 << 26);
-                    auto i1 = (opcode32 >> 13) & 1;
-                    auto i2 = (opcode32 >> 11) & 1;
-
-                    if(!s)
+                    if(opcode32 & (1 << 15))
                     {
-                        i1 ^= 1;
-                        i2 ^= 1;
+                        // branch and misc control
+                        auto op1 = (opcode32 >> 20) & 0x7F;
+                        auto op2 = (opcode32 >> 12) & 0x7;
+
+                        if((op2 & 0b101) == 0b101) // BL
+                        {
+                            auto imm11 = opcode32 & 0x7FF;
+                            auto imm10 = (opcode32 >> 16) & 0x3FF;
+
+                            auto s = opcode32 & (1 << 26);
+                            auto i1 = (opcode32 >> 13) & 1;
+                            auto i2 = (opcode32 >> 11) & 1;
+
+                            if(!s)
+                            {
+                                i1 ^= 1;
+                                i2 ^= 1;
+                            }
+
+                            uint32_t offset = imm11 << 1 | imm10 << 12 | i2 << 22 | i1 << 23;
+
+                            if(s)
+                                offset |= 0xFF000000; // sign extend
+
+                            // LR = PC | 1
+                            addInstruction(loadImm(pc | 1));
+                            addInstruction(move(GenReg::Temp, GenReg::R14));
+
+                            // jump
+                            addInstruction(loadImm(pc + offset));
+                            addInstruction(jump(GenCondition::Always, GenReg::Temp, pcNCycles + pcSCycles * 3), 4, GenOp_Call);
+                        }
+                        else if(op2 & 0b101)
+                        {
+                            printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
+                            done = true;
+                        }
+                        else
+                        {
+                            switch(op1)
+                            {
+                                case 0x3B: // misc
+                                {
+                                    auto op = (opcode32 >> 4) & 0xF;
+
+                                    if(op == 0x4 || op == 0x5) // DSB/DMB
+                                    {
+                                        GenOpInfo op{};
+                                        op.opcode = GenOpcode::NOP;
+                                        op.cycles = pcSCycles * 2 + 1;
+
+                                        addInstruction(op, 4);
+                                    }
+                                    else
+                                        printf("unhandled misc ctrl op in convertToGeneric %X\n", op);
+
+                                    break;
+                                }
+
+                                case 0x3E: // MRS
+                                case 0x3F:
+                                {
+                                    auto dstReg = reg((opcode32 >> 8) & 0xF);
+                                    auto sysm = opcode32 & 0xFF;
+
+                                    if((sysm >> 3) == 0)
+                                    {
+                                        // xPSR
+                                        uint32_t mask = 0;
+                                        if(sysm & 1) // IPSR
+                                            mask |= 0x1FF;
+
+                                        // if(sysm & 2) // T bit reads as 0 so do nothing
+
+                                        if((sysm & 4) == 0) // APSR
+                                            mask |= 0xF8000000;
+
+                                        // psr & mask
+                                        addInstruction(loadImm(mask));
+                                        addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::Temp));
+                                        // separate mov to help the target
+                                        addInstruction(move(GenReg::Temp, dstReg, pcSCycles * 2 + 1), 4);
+
+                                    }
+                                    else if((sysm >> 3) == 2)
+                                    {
+                                        // PRIMASK/CONTROL
+                                        if(sysm == 0x10)
+                                        {
+                                            // primask & 1
+                                            addInstruction(loadImm(1));
+                                            addInstruction(alu(GenOpcode::And, GenReg::PriMask, GenReg::Temp, GenReg::Temp));
+                                            addInstruction(move(GenReg::Temp, dstReg, pcSCycles * 2 + 1), 4);
+                                        }
+                                        else if(sysm == 0x14)
+                                        {
+                                            // control & 3
+                                            addInstruction(loadImm(3));
+                                            addInstruction(alu(GenOpcode::And, GenReg::Control, GenReg::Temp, GenReg::Temp));
+                                            addInstruction(move(GenReg::Temp, dstReg, pcSCycles * 2 + 1), 4);
+                                        }
+                                    }
+                                    else
+                                    {
+                                        printf("unhandled MRS in convertToGeneric %02X\n", sysm);
+                                        done = true;
+                                    }
+                                    break;
+                                }
+
+                                default:
+                                    printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
+                                    done = true;
+                            }
+                        }
                     }
-
-                    uint32_t offset = imm11 << 1 | imm10 << 12 | i2 << 22 | i1 << 23;
-
-                    if(s)
-                        offset |= 0xFF000000; // sign extend
-
-                    // LR = PC | 1
-                    addInstruction(loadImm(pc | 1));
-                    addInstruction(move(GenReg::Temp, GenReg::R14));
-
-                    // jump
-                    addInstruction(loadImm(pc + offset));
-                    addInstruction(jump(GenCondition::Always, GenReg::Temp, pcNCycles + pcSCycles * 3), 4, GenOp_Call);
-                }
-                else if(op2 & 0b101)
-                {
-                    printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
-                    done = true;
+                    else
+                    {
+                        printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF8008000);
+                        done = true;
+                    }
                 }
                 else
                 {
-                    switch(op1)
-                    {
-                        case 0x3B: // misc
-                        {
-                            auto op = (opcode32 >> 4) & 0xF;
-
-                            if(op == 0x4 || op == 0x5) // DSB/DMB
-                            {
-                                GenOpInfo op{};
-                                op.opcode = GenOpcode::NOP;
-                                op.cycles = pcSCycles * 2 + 1;
-
-                                addInstruction(op, 4);
-                            }
-                            else
-                                printf("unhandled misc ctrl op in convertToGeneric %X\n", op);
-
-                            break;
-                        }
-
-                        case 0x3E: // MRS
-                        case 0x3F:
-                        {
-                            auto dstReg = reg((opcode32 >> 8) & 0xF);
-                            auto sysm = opcode32 & 0xFF;
-
-                            if((sysm >> 3) == 0)
-                            {
-                                // xPSR
-                                uint32_t mask = 0;
-                                if(sysm & 1) // IPSR
-                                    mask |= 0x1FF;
-
-                                // if(sysm & 2) // T bit reads as 0 so do nothing
-
-                                if((sysm & 4) == 0) // APSR
-                                    mask |= 0xF8000000;
-
-                                // psr & mask
-                                addInstruction(loadImm(mask));
-                                addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::Temp));
-                                // separate mov to help the target
-                                addInstruction(move(GenReg::Temp, dstReg, pcSCycles * 2 + 1), 4);
-
-                            }
-                            else if((sysm >> 3) == 2)
-                            {
-                                // PRIMASK/CONTROL
-                                if(sysm == 0x10)
-                                {
-                                    // primask & 1
-                                    addInstruction(loadImm(1));
-                                    addInstruction(alu(GenOpcode::And, GenReg::PriMask, GenReg::Temp, GenReg::Temp));
-                                    addInstruction(move(GenReg::Temp, dstReg, pcSCycles * 2 + 1), 4);
-                                }
-                                else if(sysm == 0x14)
-                                {
-                                    // control & 3
-                                    addInstruction(loadImm(3));
-                                    addInstruction(alu(GenOpcode::And, GenReg::Control, GenReg::Temp, GenReg::Temp));
-                                    addInstruction(move(GenReg::Temp, dstReg, pcSCycles * 2 + 1), 4);
-                                }
-                            }
-                            else
-                            {
-                                printf("unhandled MRS in convertToGeneric %02X\n", sysm);
-                                done = true;
-                            }
-                            break;
-                        }
-
-                        default:
-                            printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
-                            done = true;
-                    }
+                    printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF8000000);
+                    done = true;
                 }
 
                 break;
