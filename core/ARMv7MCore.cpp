@@ -7,18 +7,18 @@
 #include <limits>
 #include <utility>
 
-#include "ARMv6MCore.h"
+#include "ARMv7MCore.h"
 
 #ifdef _MSC_VER
 #define __builtin_unreachable() __assume(false)
 #endif
 
-// FIXME: this still thinks it's an ARMv4T
+// FIXME: this still thinks it's an ARMv4T, or in some places an ARMv6M
 
-ARMv6MCore::ARMv6MCore(MemoryBus &mem) : mem(mem)
+ARMv7MCore::ARMv7MCore(MemoryBus &mem) : mem(mem)
 {}
 
-void ARMv6MCore::reset()
+void ARMv7MCore::reset()
 {
     for(auto &reg: regs)
         reg = 0;
@@ -34,19 +34,19 @@ void ARMv6MCore::reset()
     mem.reset();
 }
 
-void ARMv6MCore::setSP(uint32_t val)
+void ARMv7MCore::setSP(uint32_t val)
 {
     reg(Reg::SP) = val;
 }
 
-void ARMv6MCore::runCall(uint32_t addr, uint32_t r0, uint32_t r1)
+void ARMv7MCore::runCall(uint32_t addr, uint32_t r0, uint32_t r1)
 {
     execMutex.lock();
     doRunCall(addr, r0, r1);
     execMutex.unlock();
 }
 
-void ARMv6MCore::runCallThread(uint32_t addr, uint32_t r0, uint32_t r1)
+void ARMv7MCore::runCallThread(uint32_t addr, uint32_t r0, uint32_t r1)
 {
     // fakes an interrupt (ish)
     // expected to be called from another thread
@@ -76,17 +76,17 @@ void ARMv6MCore::runCallThread(uint32_t addr, uint32_t r0, uint32_t r1)
     execMutex.unlock();
 }
 
-void ARMv6MCore::runCallLocked(uint32_t addr, uint32_t r0, uint32_t r1)
+void ARMv7MCore::runCallLocked(uint32_t addr, uint32_t r0, uint32_t r1)
 {
     doRunCall(addr, r0, r1);
 }
 
-void ARMv6MCore::pause()
+void ARMv7MCore::pause()
 {
     paused = true;
 }
 
-void ARMv6MCore::resume()
+void ARMv7MCore::resume()
 {
     execMutex.lock();
     paused = false;
@@ -94,7 +94,7 @@ void ARMv6MCore::resume()
     execMutex.unlock();
 }
 
-void ARMv6MCore::doRunCall(uint32_t addr, uint32_t r0, uint32_t r1)
+void ARMv7MCore::doRunCall(uint32_t addr, uint32_t r0, uint32_t r1)
 {
     bool resume = addr == 0;
 
@@ -147,38 +147,38 @@ void ARMv6MCore::doRunCall(uint32_t addr, uint32_t r0, uint32_t r1)
         loReg(Reg::PC) = 0;
 }
 
-uint8_t ARMv6MCore::readMem8(uint32_t addr)
+uint8_t ARMv7MCore::readMem8(uint32_t addr)
 {
     return mem.read<uint8_t>(addr);
 }
 
-uint16_t ARMv6MCore::readMem16(uint32_t addr)
+uint16_t ARMv7MCore::readMem16(uint32_t addr)
 {
     return mem.read<uint16_t>(addr);
 }
 
 
-uint32_t ARMv6MCore::readMem32(uint32_t addr)
+uint32_t ARMv7MCore::readMem32(uint32_t addr)
 {
     return mem.read<uint32_t>(addr);
 }
 
-void ARMv6MCore::writeMem8(uint32_t addr, uint8_t data)
+void ARMv7MCore::writeMem8(uint32_t addr, uint8_t data)
 {
     mem.write<uint8_t>(addr, data);
 }
 
-void ARMv6MCore::writeMem16(uint32_t addr, uint16_t data)
+void ARMv7MCore::writeMem16(uint32_t addr, uint16_t data)
 {
     mem.write<uint16_t>(addr, data);
 }
 
-void ARMv6MCore::writeMem32(uint32_t addr, uint32_t data)
+void ARMv7MCore::writeMem32(uint32_t addr, uint32_t data)
 {
     mem.write<uint32_t>(addr, data);
 }
 
-bool ARMv6MCore::checkIT(uint16_t opcode)
+bool ARMv7MCore::checkIT(uint16_t opcode)
 {
     auto cond = itState >> 4;
 
@@ -235,7 +235,7 @@ bool ARMv6MCore::checkIT(uint16_t opcode)
     return false;
 }
 
-void ARMv6MCore::advanceIT()
+void ARMv7MCore::advanceIT()
 {
     if((itState & 7) == 0)
         itState = 0; // done
@@ -243,7 +243,7 @@ void ARMv6MCore::advanceIT()
         itState = (itState & 0xE0) | ((itState << 1) & 0x1F);
 }
 
-void ARMv6MCore::executeTHUMBInstruction()
+void ARMv7MCore::executeTHUMBInstruction()
 {
     auto &pc = loReg(Reg::PC); // not a low reg, but not banked
     uint16_t opcode = decodeOp;
@@ -296,7 +296,7 @@ void ARMv6MCore::executeTHUMBInstruction()
     __builtin_unreachable();
 }
 
-void ARMv6MCore::doTHUMB01MoveShifted(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB01MoveShifted(uint16_t opcode, uint32_t pc)
 {
     auto instOp = (opcode >> 11) & 0x1;
     auto srcReg = static_cast<Reg>((opcode >> 3) & 7);
@@ -341,7 +341,7 @@ void ARMv6MCore::doTHUMB01MoveShifted(uint16_t opcode, uint32_t pc)
     }
 }
 
-void ARMv6MCore::doTHUMB0102(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB0102(uint16_t opcode, uint32_t pc)
 {
     auto instOp = (opcode >> 11) & 0x3;
     auto srcReg = static_cast<Reg>((opcode >> 3) & 7);
@@ -415,7 +415,7 @@ void ARMv6MCore::doTHUMB0102(uint16_t opcode, uint32_t pc)
     }
 }
 
-void ARMv6MCore::doTHUMB03(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB03(uint16_t opcode, uint32_t pc)
 {
     auto instOp = (opcode >> 11) & 0x3;
     auto dstReg = static_cast<Reg>((opcode >> 8) & 7);
@@ -458,7 +458,7 @@ void ARMv6MCore::doTHUMB03(uint16_t opcode, uint32_t pc)
     }
 }
 
-void ARMv6MCore::doTHUMB040506(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB040506(uint16_t opcode, uint32_t pc)
 {
     if(opcode & (1 << 11)) // format 6, PC-relative load
         return doTHUMB06PCRelLoad(opcode, pc);
@@ -468,7 +468,7 @@ void ARMv6MCore::doTHUMB040506(uint16_t opcode, uint32_t pc)
         return doTHUMB04ALU(opcode, pc);
 }
 
-void ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
 {
     auto instOp = (opcode >> 6) & 0xF;
     auto srcReg = static_cast<Reg>((opcode >> 3) & 7);
@@ -648,7 +648,7 @@ void ARMv6MCore::doTHUMB04ALU(uint16_t opcode, uint32_t pc)
     }
 }
 
-void ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
 {
     auto op = (opcode >> 8) & 3;
     bool h1 = opcode & (1 << 7);
@@ -711,7 +711,7 @@ void ARMv6MCore::doTHUMB05HiReg(uint16_t opcode, uint32_t pc)
     }
 }
 
-void ARMv6MCore::doTHUMB06PCRelLoad(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB06PCRelLoad(uint16_t opcode, uint32_t pc)
 {
     auto dstReg = static_cast<Reg>((opcode >> 8) & 7);
     uint8_t word = opcode & 0xFF;
@@ -720,7 +720,7 @@ void ARMv6MCore::doTHUMB06PCRelLoad(uint16_t opcode, uint32_t pc)
     loReg(dstReg) = readMem32((pc & ~2) + (word << 2));
 }
 
-void ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
 {
     auto offReg = static_cast<Reg>((opcode >> 6) & 7);
     auto baseReg = static_cast<Reg>((opcode >> 3) & 7);
@@ -782,7 +782,7 @@ void ARMv6MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
     }
 }
 
-void ARMv6MCore::doTHUMB09LoadStoreWord(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB09LoadStoreWord(uint16_t opcode, uint32_t pc)
 {
     bool isLoad = opcode & (1 << 11);
     auto offset = ((opcode >> 6) & 0x1F);
@@ -796,7 +796,7 @@ void ARMv6MCore::doTHUMB09LoadStoreWord(uint16_t opcode, uint32_t pc)
         writeMem32(addr, loReg(dstReg));
 }
 
-void ARMv6MCore::doTHUMB09LoadStoreByte(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB09LoadStoreByte(uint16_t opcode, uint32_t pc)
 {
     bool isLoad = opcode & (1 << 11);
     auto offset = ((opcode >> 6) & 0x1F);
@@ -810,7 +810,7 @@ void ARMv6MCore::doTHUMB09LoadStoreByte(uint16_t opcode, uint32_t pc)
         writeMem8(addr, loReg(dstReg));
 }
 
-void ARMv6MCore::doTHUMB10LoadStoreHalf(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB10LoadStoreHalf(uint16_t opcode, uint32_t pc)
 {
     bool isLoad = opcode & (1 << 11);
     auto offset = ((opcode >> 6) & 0x1F) << 1;
@@ -824,7 +824,7 @@ void ARMv6MCore::doTHUMB10LoadStoreHalf(uint16_t opcode, uint32_t pc)
         writeMem16(addr, loReg(dstReg));
 }
 
-void ARMv6MCore::doTHUMB11SPRelLoadStore(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB11SPRelLoadStore(uint16_t opcode, uint32_t pc)
 {
     bool isLoad = opcode & (1 << 11);
     auto dstReg = static_cast<Reg>((opcode >> 8) & 7);
@@ -838,7 +838,7 @@ void ARMv6MCore::doTHUMB11SPRelLoadStore(uint16_t opcode, uint32_t pc)
         writeMem32(addr, loReg(dstReg));
 }
 
-void ARMv6MCore::doTHUMB12LoadAddr(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB12LoadAddr(uint16_t opcode, uint32_t pc)
 {
     bool isSP = opcode & (1 << 11);
     auto dstReg = static_cast<Reg>((opcode >> 8) & 7);
@@ -850,7 +850,7 @@ void ARMv6MCore::doTHUMB12LoadAddr(uint16_t opcode, uint32_t pc)
         loReg(dstReg) = (pc & ~2) + word; // + 4, bit 1 forced to 0
 }
 
-void ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
 {
     switch((opcode >> 8) & 0xF)
     {
@@ -986,7 +986,7 @@ void ARMv6MCore::doTHUMBMisc(uint16_t opcode, uint32_t pc)
     exit(1);
 }
 
-void ARMv6MCore::doTHUMB13SPOffset(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB13SPOffset(uint16_t opcode, uint32_t pc)
 {
     bool isNeg = opcode & (1 << 7);
     int off = (opcode & 0x7F) << 2;
@@ -997,7 +997,7 @@ void ARMv6MCore::doTHUMB13SPOffset(uint16_t opcode, uint32_t pc)
         loReg(curSP) += off;
 }
 
-void ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
 {
     // timings here are probably off
 
@@ -1054,7 +1054,7 @@ void ARMv6MCore::doTHUMB14PushPop(uint16_t opcode, uint32_t pc)
     }
 }
 
-void ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
 {
     bool isLoad = opcode & (1 << 11);
     auto baseReg = static_cast<Reg>((opcode >> 8) & 7);
@@ -1115,7 +1115,7 @@ void ARMv6MCore::doTHUMB15MultiLoadStore(uint16_t opcode, uint32_t pc)
     }
 }
 
-void ARMv6MCore::doTHUMB1617(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB1617(uint16_t opcode, uint32_t pc)
 {
     // format 16, conditional branch (+ SWI)
     auto cond = (opcode >> 8) & 0xF;
@@ -1192,7 +1192,7 @@ void ARMv6MCore::doTHUMB1617(uint16_t opcode, uint32_t pc)
     updateTHUMBPC(pc + offset * 2);
 }
 
-void ARMv6MCore::doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc)
 {
     if(opcode & (1 << 11))
         return doTHUMB32BitInstruction(opcode, pc);
@@ -1202,7 +1202,7 @@ void ARMv6MCore::doTHUMB18UncondBranch(uint16_t opcode, uint32_t pc)
     updateTHUMBPC(pc + offset);
 }
 
-uint32_t ARMv6MCore::getShiftedReg(uint32_t opcode, bool &carry)
+uint32_t ARMv7MCore::getShiftedReg(uint32_t opcode, bool &carry)
 {
     auto imm = ((opcode >> 10) & 0x1C) | ((opcode >> 6) & 0x3);
     auto type = (opcode >> 4) & 3;
@@ -1274,7 +1274,7 @@ uint32_t ARMv6MCore::getShiftedReg(uint32_t opcode, bool &carry)
     return ret;
 }
 
-void ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool carry, bool setFlags)
+void ARMv7MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool carry, bool setFlags)
 {
     switch(op)
     {
@@ -1475,7 +1475,7 @@ void ARMv6MCore::doDataProcessing(int op, Reg nReg, uint32_t op2, Reg dReg, bool
     exit(1);
 }
 
-void ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
 {
     // fetch second half
     uint32_t opcode32 = opcode << 16 | decodeOp;
@@ -1539,7 +1539,7 @@ void ARMv6MCore::doTHUMB32BitInstruction(uint16_t opcode, uint32_t pc)
     __builtin_unreachable();
 }
 
-void ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
 {
     auto op = (opcode >> 23) & 3;
     bool writeback = opcode & (1 << 21);   
@@ -1659,7 +1659,7 @@ void ARMv6MCore::doTHUMB32BitLoadStoreMultiple(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-void ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 23) & 3;
     auto op2 = (opcode >> 20) & 3;
@@ -1739,7 +1739,7 @@ void ARMv6MCore::doTHUMB32BitLoadStoreDualEx(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-void ARMv6MCore::doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t pc)
 {
     auto op = (opcode >> 21) & 0xF;
     bool setFlags = opcode & (1 << 20);
@@ -1755,7 +1755,7 @@ void ARMv6MCore::doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t 
     return doDataProcessing(op, nReg, val, dstReg, carry, setFlags);
 }
 
-void ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
 {
     bool op = opcode & (1 << 4);
     auto coproc = (opcode >> 8) & 0xF;
@@ -1972,7 +1972,7 @@ void ARMv6MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-void ARMv6MCore::doTHUMB32BitDataProcessingModifiedImm(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitDataProcessingModifiedImm(uint32_t opcode, uint32_t pc)
 {
     auto op = (opcode >> 21) & 0xF;
     bool setFlags = opcode & (1 << 20);
@@ -2018,7 +2018,7 @@ void ARMv6MCore::doTHUMB32BitDataProcessingModifiedImm(uint32_t opcode, uint32_t
     return doDataProcessing(op, nReg, val, dstReg, carry, setFlags);
 }
 
-void ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc)
 {
     auto op = (opcode >> 21) & 0xF;
 
@@ -2198,7 +2198,7 @@ void ARMv6MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
     exit(1);
 }
 
-void ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
 {
     // branch and misc control
 
@@ -2409,7 +2409,7 @@ void ARMv6MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-void ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 21) & 7;
     auto op2 = (opcode >> 6) & 0x3F;
@@ -2476,7 +2476,7 @@ void ARMv6MCore::doTHUMB32BitStoreSingle(uint32_t opcode, uint32_t pc)
     }
 }
 
-void ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 23) & 3;
     auto op2 = (opcode >> 6) & 0x3F;
@@ -2558,7 +2558,7 @@ void ARMv6MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-void ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 23) & 3;
     auto op2 = (opcode >> 6) & 0x3F;
@@ -2640,7 +2640,7 @@ void ARMv6MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-void ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 23) & 3;
     auto op2 = (opcode >> 6) & 0x3F;
@@ -2721,7 +2721,7 @@ void ARMv6MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
     return;
 }
 
-void ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 20) & 0xF;
     auto op2 = (opcode >> 4) & 0xF;
@@ -3008,7 +3008,7 @@ void ARMv6MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-void ARMv6MCore::doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 20) & 7;
     auto op2 = (opcode >> 4) & 3;
@@ -3058,7 +3058,7 @@ void ARMv6MCore::doTHUMB32BitMultiplyDiff(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-void ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
+void ARMv7MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
 {
     auto op1 = (opcode >> 20) & 7;
     auto op2 = (opcode >> 4) & 0xF;
@@ -3131,7 +3131,7 @@ void ARMv6MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
     exit(1);
 }
 
-void ARMv6MCore::doVFPDataProcessing(uint32_t opcode, uint32_t pc, bool dWidth)
+void ARMv7MCore::doVFPDataProcessing(uint32_t opcode, uint32_t pc, bool dWidth)
 {
     auto getVReg = [opcode](int pos, int hiLoPos, bool dWidth)
     {
@@ -3610,7 +3610,7 @@ void ARMv6MCore::doVFPDataProcessing(uint32_t opcode, uint32_t pc, bool dWidth)
     printf("cdp %x %x %x %x %x\n", t, opc1, opc2, opc3, opc4);
 }
 
-void ARMv6MCore::updateTHUMBPC(uint32_t pc)
+void ARMv7MCore::updateTHUMBPC(uint32_t pc)
 {
     // called when PC is updated in THUMB mode (except for incrementing)
     assert(!(pc & 1));

@@ -4,12 +4,12 @@
 
 #include "MemoryBus.h"
 
-class ARMv6MCore final
+class ARMv7MCore final
 {
 public:
     using APICallback = void(*)(int index, uint32_t *regs);
 
-    ARMv6MCore(MemoryBus &mem);
+    ARMv7MCore(MemoryBus &mem);
 
     void reset();
 

@@ -7,11 +7,11 @@
 #include "Metadata.h"
 #include "RemoteFiles.h"
 
-#include "ARMv6MCore.h"
+#include "ARMv7MCore.h"
 #include "MemoryBus.h"
 
 MemoryBus mem;
-ARMv6MCore cpuCore(mem);
+ARMv7MCore cpuCore(mem);
 
 static bool fileLoaded = false;
 static uint32_t homeDownTime = 0;

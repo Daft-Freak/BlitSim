@@ -1,7 +1,7 @@
 add_library(BlitSimCore INTERFACE)
 
 target_sources(BlitSimCore INTERFACE
-    ARMv6MCore.cpp
+    ARMv7MCore.cpp
     MemoryBus.cpp
 )
 

@@ -5,7 +5,7 @@
 
 #include <SDL.h>
 
-#include "ARMv6MCore.h"
+#include "ARMv7MCore.h"
 
 constexpr uint32_t blit_game_magic = 0x54494C42; // "BLIT"
 
@@ -33,7 +33,7 @@ struct RawMetadata {
 static bool quit = false;
 
 static MemoryBus mem;
-static ARMv6MCore cpuCore(mem);
+static ARMv7MCore cpuCore(mem);
 
 static std::ifstream blitFile;
 

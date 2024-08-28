@@ -13,10 +13,10 @@
 #include "RemoteFiles.h"
 
 #include "32blitAPI.h"
-#include "ARMv6MCore.h"
+#include "ARMv7MCore.h"
 #include "MemoryBus.h"
 
-extern ARMv6MCore cpuCore;
+extern ARMv7MCore cpuCore;
 extern MemoryBus mem;
 
 std::string launchFile;

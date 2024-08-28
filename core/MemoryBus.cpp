@@ -5,7 +5,7 @@
 #include "MemoryBus.h"
 
 #include "32blitAPI.h"
-#include "ARMv6MCore.h"
+#include "ARMv7MCore.h"
 
 enum MemoryRegion
 {

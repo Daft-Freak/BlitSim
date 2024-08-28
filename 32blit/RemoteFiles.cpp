@@ -2,7 +2,7 @@
 
 #include "RemoteFiles.h"
 
-#include "ARMv6MCore.h"
+#include "ARMv7MCore.h"
 
 #ifdef __EMSCRIPTEN__
 
@@ -10,7 +10,7 @@
 #include <nlohmann/json.hpp>
 using json = nlohmann::json;
 
-extern ARMv6MCore cpuCore;
+extern ARMv7MCore cpuCore;
 
 struct RemoteFileInfo
 {
