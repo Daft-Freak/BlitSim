@@ -1284,8 +1284,174 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                     }
                     else // load/store multiple
                     {
-                        printf("unhandled op in convertToGeneric %08X (l/s m)\n", opcode32 & 0xFF000000);
-                        done = true;
+                        auto op = (opcode32 >> 23) & 3;
+                        bool writeback = opcode32 & (1 << 21);   
+                        bool isLoad = opcode32 & (1 << 20);
+                        auto baseReg = (opcode32 >> 16) & 0xF;
+                        uint16_t regList = opcode32 & 0xFFFF;
+
+                        assert(!(regList & (1 << 13)));
+
+                        if(isLoad)
+                        {
+                            bool baseInList = regList & (1 << baseReg);
+
+                            if(op == 1) // IA
+                            {
+                                addInstruction(move(reg(baseReg), GenReg::Temp2));
+
+                                for(int i = 0; i < 15; i++)
+                                {
+                                    if(!(regList & (1 << i)))
+                                        continue;
+
+                                    addInstruction(load(4, GenReg::Temp2, reg(i), 0));
+                                
+                                    // addr += 4
+                                    addInstruction(loadImm(4));
+                                    addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                                }
+
+                                bool writePC = regList >> 15;
+
+                                if(writeback && !baseInList)
+                                {
+                                    if(writePC)
+                                    {
+                                        // do the last +4
+                                        addInstruction(loadImm(4));
+                                        addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, reg(baseReg)));
+                                    }
+                                    else
+                                        addInstruction(move(GenReg::Temp2, reg(baseReg)));
+                                }
+
+                                if(writePC)
+                                {
+                                    // jump
+                                    addInstruction(load(4, GenReg::Temp2, GenReg::Temp2, 0));
+                                    addInstruction(loadImm(~1u));
+                                    addInstruction(alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp2));
+                                    addInstruction(jump(GenCondition::Always, GenReg::Temp2, 0));
+                                }
+
+                                genBlock.instructions.back().len = 4;
+                            }
+                            else if(op == 2) // DB
+                            {
+                                // pre-decrement address
+                                int offset = 0;
+                                for(uint16_t t = regList; t; t >>= 1)
+                                {
+                                    if(t & 1)
+                                        offset += 4;
+                                }
+
+                                addInstruction(loadImm(offset));
+                                addInstruction(alu(GenOpcode::Subtract, reg(baseReg), GenReg::Temp, GenReg::Temp2));
+
+                                // this loop is the same as above...
+                                for(int i = 0; i < 15; i++)
+                                {
+                                    if(!(regList & (1 << i)))
+                                        continue;
+
+                                    addInstruction(load(4, GenReg::Temp2, reg(i), 0));
+                                
+                                    // addr += 4
+                                    addInstruction(loadImm(4));
+                                    addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                                }
+
+                                bool writePC = regList >> 15;
+
+                                if(writeback && !baseInList)
+                                {
+                                    addInstruction(loadImm(offset));
+                                    addInstruction(alu(GenOpcode::Subtract, reg(baseReg), GenReg::Temp, reg(baseReg)));
+                                }
+
+                                if(writePC)
+                                {
+                                    // jump
+                                    addInstruction(load(4, GenReg::Temp2, GenReg::Temp2, 0));
+                                    addInstruction(loadImm(~1u));
+                                    addInstruction(alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp2));
+                                    addInstruction(jump(GenCondition::Always, GenReg::Temp2, 0));
+                                }
+
+                                genBlock.instructions.back().len = 4;
+                            }
+                            else
+                            {
+                                printf("unhandled op in convertToGeneric %08X (LDM %i)\n", opcode32 & 0xFF000000, op);
+                                done = true;
+                            }
+                        }
+                        else
+                        {
+                            assert(!(regList & (1 << 15)));
+
+                            if(op == 1) // IA
+                            {
+                                addInstruction(move(reg(baseReg), GenReg::Temp2));
+
+                                for(int i = 0; i < 15; i++)
+                                {
+                                    if(!(regList & (1 << i)))
+                                        continue;
+
+                                    addInstruction(store(4, GenReg::Temp2, reg(i), 0));
+                                
+                                    // addr += 4
+                                    addInstruction(loadImm(4));
+                                    addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                                }
+
+                                if(writeback)
+                                    addInstruction(move(GenReg::Temp2, reg(baseReg)));
+
+                                genBlock.instructions.back().len = 4;
+                            }
+                            else if(op == 2) // DB
+                            {
+                                // pre-decrement address
+                                int offset = 0;
+                                for(uint16_t t = regList; t; t >>= 1)
+                                {
+                                    if(t & 1)
+                                        offset += 4;
+                                }
+
+                                addInstruction(loadImm(offset));
+                                addInstruction(alu(GenOpcode::Subtract, reg(baseReg), GenReg::Temp, GenReg::Temp2));
+
+                                for(int i = 0; i < 15; i++)
+                                {
+                                    if(!(regList & (1 << i)))
+                                        continue;
+
+                                    addInstruction(store(4, GenReg::Temp2, reg(i), 0));
+                                
+                                    // addr += 4
+                                    addInstruction(loadImm(4));
+                                    addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                                }
+
+                                if(writeback)
+                                {
+                                    addInstruction(loadImm(offset));
+                                    addInstruction(alu(GenOpcode::Subtract, reg(baseReg), GenReg::Temp, reg(baseReg)));
+                                }
+
+                                genBlock.instructions.back().len = 4;
+                            }
+                            else
+                            {
+                                printf("unhandled op in convertToGeneric %08X (STM %i)\n", opcode32 & 0xFF000000, op);
+                                done = true;
+                            }
+                        }
                     }
                 }
                 else if(op1 == 0b11110)
