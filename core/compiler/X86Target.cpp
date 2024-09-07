@@ -1658,6 +1658,10 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
         bool shouldSkip = nextInstr == endInstr || ((instr.flags & GenOp_Exit) && !isCond && !(nextInstr->flags & GenOp_BranchTarget));
         if(newEmuOp && !shouldSkip)
         {
+             // make sure to restore regs if next instr is a branch target (otherwise we might insert after the branch)
+            if(nextInstr != endInstr && (nextInstr->flags & GenOp_BranchTarget))
+                callRestoreIfNeeded(builder, needCallRestore);
+
             lastInstrCycleCheck = builder.getPtr(); // save in case the next instr is a branch target
         }
 
