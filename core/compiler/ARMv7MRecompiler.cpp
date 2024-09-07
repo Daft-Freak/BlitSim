@@ -530,7 +530,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
     auto pcPtr = reinterpret_cast<const uint16_t *>(std::as_const(mem).mapAddress(pc));
 
     // we don't handle prefetch here, hmm
-    auto pcSCycles = 0, pcNCycles = 0;
+    auto pcSCycles = 1, pcNCycles = 1;
 
     while(!done)
     {
