@@ -1443,8 +1443,84 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                     }
                     else if((opcode32 & 0x700000) == 0x500000) // load word
                     {
-                        printf("unhandled op in convertToGeneric %08X (load w)\n", opcode32 & 0xFF000000);
-                        done = true;
+                        auto op1 = (opcode32 >> 23) & 3;
+                        auto op2 = (opcode32 >> 6) & 0x3F;
+
+                        auto baseReg = (opcode32 >> 16) & 0xF;
+                        auto dstReg = (opcode32 >> 12) & 0xF;
+
+                        if(baseReg == 15) // LDR (literal)
+                        {
+                            printf("unhandled op in convertToGeneric %08X (load lit)\n", opcode32 & 0xFF000000);
+                            done = true;
+                        }
+                        else if(op1 == 0 && op2 == 0) // LDR (register)
+                        {
+                            printf("unhandled op in convertToGeneric %08X (load w reg)\n", opcode32 & 0xFF000000);
+                            done = true;
+                        }
+                        else if(op1 == 0 && (op2 & 0x3C) == 0x38) // LDRT
+                        {
+                            printf("unhandled op in convertToGeneric %08X (ldrt)\n", opcode32 & 0xFF000000);
+                            done = true;
+                        }
+                        else // LDR (immediate)
+                        {
+                            bool isPC = dstReg == 15;
+                            auto dst = isPC ? GenReg::Temp2 : reg(dstReg);
+
+                            if(op1 == 1) // +12 bit imm
+                            {
+                                auto offset = (opcode32 & 0xFFF);
+
+                                if(offset)
+                                {
+                                    addInstruction(loadImm(offset));
+                                    addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, GenReg::Temp));
+                                }
+
+                                addInstruction(load(4, offset ? GenReg::Temp : reg(baseReg), dst, 0), isPC ? 0 : 4);
+                            }
+                            else
+                            {
+                                auto offset = (opcode32 & 0xFF);
+
+                                bool writeback = opcode32 & (1 << 8);
+                                bool add = opcode32 & (1 << 9);
+                                bool index = opcode32 & (1 << 10);
+
+                                if(index)
+                                {
+                                    addInstruction(loadImm(add ? offset : -offset));
+                                    addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, GenReg::Temp));
+                                }
+
+                                addInstruction(load(4, index ? GenReg::Temp : reg(baseReg), dst, 0), (writeback || isPC) ? 0 : 4);
+
+                                // write back adjusted base
+                                if(writeback)
+                                {
+                                    if(!index) // adjust now if not done yet
+                                    {
+                                        addInstruction(loadImm(add ? offset : -offset));
+                                        addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, reg(baseReg)), isPC ? 0 : 4);
+                                    }
+                                    else
+                                        addInstruction(move(GenReg::Temp, reg(baseReg)), isPC ? 0 : 4); // can probably avoid this
+                                }
+                            }
+
+                            if(isPC)
+                            {
+                                // clear thumb bit and jump
+                                addInstruction(loadImm(~1u));
+                                addInstruction(alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp));
+                                addInstruction(jump(GenCondition::Always, GenReg::Temp, 0), 4);
+
+                                if(pc > maxBranch)
+                                    done = true;
+                            }
+                        }
                     }
                     else if((opcode32 & 0x700000) == 0x300000) // load halfword, memory hints
                     {
