@@ -947,6 +947,28 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             addInstruction(alu(GenOpcode::Add, GenReg::R13, GenReg::Temp, GenReg::R13, pcSCycles), 2);
                         break;
                     }
+
+                    case 0x1: // CBZ
+                    case 0x3:
+                    case 0x9: // CBNZ
+                    case 0xB:
+                    {
+                        bool nz = opcode & (1 << 11);
+                        int offset = (opcode & 0xF8) >> 2 | (opcode & (1 << 9)) >> 3;
+                        auto src = lowReg(opcode & 7);
+
+                        // compare with 0
+                        addInstruction(loadImm(0));
+                        addInstruction(compare(src, GenReg::Temp, 0), 0, writeZ);
+
+                        // branch
+                        auto addr = pc + 2 + offset;
+                        addInstruction(loadImm(addr));
+                        addInstruction(jump(nz ? GenCondition::NotEqual : GenCondition::Equal, GenReg::Temp, 0), 2);
+
+                        updateEnd(addr);
+                        break;
+                    }
                     
                     case 0x2:
                     {
