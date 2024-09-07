@@ -1534,8 +1534,60 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                     }
                     else // store single data item
                     {
-                        printf("unhandled op in convertToGeneric %08X (store single)\n", opcode32 & 0xFF000000);
-                        done = true;
+                        auto op1 = (opcode32 >> 21) & 7;
+                        auto op2 = (opcode32 >> 6) & 0x3F;
+
+                        auto baseReg = reg((opcode32 >> 16) & 0xF);
+                        auto dstReg = reg((opcode32 >> 12) & 0xF);
+
+                        int width = 1 << (op1 & 3);
+
+                        if(op1 & 4) // 12 bit immediate
+                        {
+                            auto offset = (opcode32 & 0xFFF);
+                            storeWithOffset(width, baseReg, offset, dstReg, 0, 4);
+                        }
+                        else if(op2 & 0x20) // 8 bit immediate
+                        {
+                            auto offset = (opcode32 & 0xFF);
+
+                            bool writeback = opcode32 & (1 << 8);
+                            bool add = opcode32 & (1 << 9);
+                            bool index = opcode32 & (1 << 10);
+
+                            if(index)
+                            {
+                                addInstruction(loadImm(add ? offset : -offset));
+                                addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, GenReg::Temp));
+                            }
+
+                            addInstruction(store(width, index ? GenReg::Temp : baseReg, dstReg, 0), writeback ? 0 : 4);
+
+                            // write back adjusted base
+                            if(writeback)
+                            {
+                                if(!index) // adjust now if not done yet
+                                {
+                                    addInstruction(loadImm(add ? offset : -offset));
+                                    addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, baseReg), 4);
+                                }
+                                else
+                                    addInstruction(move(GenReg::Temp, baseReg), 4); // can probably avoid this
+                            }
+                        }
+                        else // register
+                        {
+                            auto offReg = reg(opcode32 & 0xF);
+                            auto shift = (opcode32 >> 4) & 3;
+
+                            // base + off << shift
+                            addInstruction(loadImm(shift));
+                            addInstruction(alu(GenOpcode::ShiftLeft, offReg, GenReg::Temp, GenReg::Temp));
+                            addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, GenReg::Temp));
+
+                            // do the store
+                            addInstruction(store(width, GenReg::Temp, dstReg, 0), 4);
+                        }
                     }
                 }
                 else
