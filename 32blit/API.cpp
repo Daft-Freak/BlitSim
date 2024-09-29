@@ -1,4 +1,5 @@
 #include <cstring>
+#include <map>
 
 #ifdef __EMSCRIPTEN__
 #include <emscripten/emscripten.h>
