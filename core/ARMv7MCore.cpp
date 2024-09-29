@@ -2889,7 +2889,29 @@ void ARMv7MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
                 
                 return;
             }
-            // 3: ROR
+            case 3: // ROR
+            {
+                auto shift = loReg(mReg) & 0x1F;
+                auto val = loReg(nReg);
+
+                auto carry = cpsr & Flag_C;
+                uint32_t res;
+
+                if(loReg(mReg) & 0xFF)
+                {
+                    carry = val & (1 << (shift - 1)) ? Flag_C : 0;
+                    res = val >> shift | val << (32 - shift);
+
+                    loReg(dReg) = res;
+                }
+                else
+                    loReg(dReg) = res = val;
+
+                if(setFlags)
+                    cpsr = (cpsr & ~(Flag_C | Flag_N | Flag_Z)) | (res & signBit) | (res == 0 ? Flag_Z : 0) | carry;
+                
+                return;
+            }
         }
     }
     else if(op2 & 0b1000)
