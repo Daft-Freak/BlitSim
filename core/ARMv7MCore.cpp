@@ -3175,6 +3175,19 @@ void ARMv7MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
 
         return;
     }
+    else if(op1 == 4)
+    {
+        if(op2 == 0) // SMLAL
+        {
+            uint64_t a = loReg(dstLoReg) | static_cast<uint64_t>(loReg(dstHiReg)) << 32;
+            uint64_t res = static_cast<int64_t>(static_cast<int32_t>(loReg(nReg))) * static_cast<int64_t>(static_cast<int32_t>(loReg(mReg))) + a;
+
+            loReg(dstLoReg) = res & 0xFFFFFFFF;
+            loReg(dstHiReg) = res >> 32;
+
+            return;
+        }
+    }
     else if(op1 == 6)
     {
         if(op2 == 0) // UMLAL
