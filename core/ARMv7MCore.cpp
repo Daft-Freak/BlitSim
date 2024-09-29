@@ -2372,10 +2372,10 @@ void ARMv7MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
                 if(sysm & 1) // IPSR
                     mask |= 0x1FF;
 
-                // if(sysm & 2) // T bit reads as 0 so do nothing
+                // if(sysm & 2) // EPSR reads as 0 so do nothing
 
-                if(sysm & 4) // APSR
-                    mask |= 0xF8000000;
+                if(!(sysm & 4)) // APSR
+                    mask |= Flag_N | Flag_Z | Flag_C | Flag_V | Flag_Q | Flag_GE0 | Flag_GE1 | Flag_GE2 | Flag_GE3;
 
                 reg(dstReg) = cpsr & mask;
 
