@@ -2363,9 +2363,9 @@ void ARMv7MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
         {
             auto op = (opcode >> 4) & 0xF;
 
-            if(op == 0x4 || op == 0x5) // DSB/DMB
+            if(op == 0x4 || op == 0x5 || op == 0x6) // DSB/DMB/ISB
             {
-                //do something?
+                //do something? (we don't implement caches)
                 return;
             }
 
