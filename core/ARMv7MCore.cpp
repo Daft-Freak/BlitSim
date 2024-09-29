@@ -2125,7 +2125,7 @@ void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
             int lsbit = ((opcode >> 10) & 0x1C) | ((opcode >> 6) & 3);
             int width = (opcode & 0x1F) + 1;
 
-            auto mask = (1 << width) - 1;
+            auto mask = width == 32 ? ~0 : (1 << width) - 1;
 
             auto res = (loReg(nReg) >> lsbit) & mask;
 
@@ -2144,11 +2144,11 @@ void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
 
             assert(msb >= lsb);
 
-            auto mask = (1 << (msb - lsb + 1)) - 1;
+            auto mask = (msb - lsb == 31) ? ~ 0 : (1 << (msb - lsb + 1)) - 1;
             if(nReg == Reg::PC) // BFC
                 loReg(dstReg) = (loReg(dstReg) & ~(mask << lsb));
             else // BFI
-                loReg(dstReg) = (loReg(dstReg) & ~(mask << lsb)) | loReg(nReg) << lsb;
+                loReg(dstReg) = (loReg(dstReg) & ~(mask << lsb)) | (loReg(nReg) & mask) << lsb;
 
             return;
         }
@@ -2200,7 +2200,7 @@ void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
             int lsbit = ((opcode >> 10) & 0x1C) | ((opcode >> 6) & 3);
             int width = (opcode & 0x1F) + 1;
 
-            auto mask = (1 << width) - 1;
+            auto mask = width == 32 ? ~0 : (1 << width) - 1;
 
             loReg(dstReg) = (loReg(nReg) >> lsbit) & mask;
             
