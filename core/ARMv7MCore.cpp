@@ -2521,8 +2521,6 @@ void ARMv7MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
 
         return;
     }
-    else if(!(op1 & 1) && (op2 & 0x3C) == 0x38) // LDR(S)BT
-    {}
     else // LDR(S)B (immediate)
     {
         bool isSigned = op1 & 2;
@@ -2549,6 +2547,7 @@ void ARMv7MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
             bool writeback = opcode & (1 << 8);
             bool add = opcode & (1 << 9);
             bool index = opcode & (1 << 10);
+            // !writeback && add && index is LDR(S)BT, but we can just handle it the same as LDR(S)B
 
             uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
             uint32_t addr = index ? offsetAddr : loReg(baseReg);
@@ -2603,8 +2602,6 @@ void ARMv7MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
 
         return;
     }
-    else if(!(op1 & 1) && (op2 & 0x3C) == 0x38) // LDR(S)HT
-    {}
     else // LDR(S)H (immediate)
     {
         bool isSigned = op1 & 2;
@@ -2631,6 +2628,7 @@ void ARMv7MCore::doTHUMB32BitLoadHalfHint(uint32_t opcode, uint32_t pc)
             bool writeback = opcode & (1 << 8);
             bool add = opcode & (1 << 9);
             bool index = opcode & (1 << 10);
+            // !writeback && add && index is LDR(S)HT, but we can just handle it the same as LDR(S)H
 
             uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
             uint32_t addr = index ? offsetAddr : loReg(baseReg);
@@ -2689,11 +2687,6 @@ void ARMv7MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
 
         data = readMem32(addr);
     }
-    else if(op1 == 0 && (op2 & 0x3C) == 0x38) // LDRT
-    {
-        printf("Unhandled load word opcode %08X (%X %X) @%08X\n", opcode, op1, op2, pc - 6);
-        exit(1);
-    }
     else // LDR (immediate)
     {
         if(op1 == 1) // + 12 bit imm
@@ -2711,6 +2704,7 @@ void ARMv7MCore::doTHUMB32BitLoadWord(uint32_t opcode, uint32_t pc)
             bool writeback = opcode & (1 << 8);
             bool add = opcode & (1 << 9);
             bool index = opcode & (1 << 10);
+            // !writeback && add && index is LDRT, but we can just handle it the same as LDR
 
             uint32_t offsetAddr = add ? loReg(baseReg) + offset : loReg(baseReg) - offset;
             uint32_t addr = index ? offsetAddr : loReg(baseReg);
