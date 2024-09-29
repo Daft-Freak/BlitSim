@@ -2996,6 +2996,11 @@ void ARMv7MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
 
                     switch(op2 & 3)
                     {
+                        case 0: // REV
+                        {
+                            loReg(dReg) = loReg(mReg) >> 24 | loReg(mReg) << 24 | ((loReg(mReg) << 8) & 0xFF0000) | ((loReg(mReg) >> 8) & 0xFF00);
+                            return;
+                        }
                         case 1: // REV16
                         {
                             loReg(dReg) = ((loReg(mReg) & 0xFF00FF00) >> 8) | ((loReg(mReg) & 0x00FF00FF) << 8);
@@ -3011,6 +3016,14 @@ void ARMv7MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
                             val = ( val >> 16              ) | ( val               << 16);
 
                             loReg(dReg) = val;
+                            return;
+                        }
+                        case 3: // REVSH
+                        {
+                            auto val = loReg(mReg);
+                            loReg(dReg) = ((val >> 8) & 0x00FF) | ((val << 8) & 0xFF00);
+                            if(val & 0x80)
+                                loReg(dReg) |= 0xFFFF0000; // sign extend
                             return;
                         }
                     }
