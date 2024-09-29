@@ -3141,7 +3141,13 @@ void ARMv7MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
         assert(op2 == 0xF);
         assert(dstLoReg == Reg::PC);
 
-        int32_t res = static_cast<int32_t>(loReg(nReg)) / static_cast<int32_t>(loReg(mReg));
+        int32_t res = 0;
+        
+        // min int / -1 results in min int
+        if(loReg(nReg) == 0x80000000 && loReg(mReg) == 0xFFFFFFFF)
+            res = 0x80000000;
+        else if(loReg(mReg)) // don't divide by zero (return 0)
+            res = static_cast<int32_t>(loReg(nReg)) / static_cast<int32_t>(loReg(mReg));
 
         loReg(dstHiReg) = res;
 
@@ -3163,7 +3169,7 @@ void ARMv7MCore::doTHUMB32BitLongMultiplyDiv(uint32_t opcode, uint32_t pc)
         assert(op2 == 0xF);
         assert(dstLoReg == Reg::PC);
 
-        auto res = loReg(nReg) / loReg(mReg);
+        auto res = loReg(mReg) == 0 ? 0 : loReg(nReg) / loReg(mReg);
 
         loReg(dstHiReg) = res;
 
