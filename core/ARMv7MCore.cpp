@@ -2114,7 +2114,7 @@ void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
 
                 loReg(dstReg) = val;
 
-                cpsr = (cpsr & ~Flag_Q) | (sat ? Flag_Q : 0);
+                cpsr |= (sat ? Flag_Q : 0);
 
                 return;
             }
@@ -2189,7 +2189,7 @@ void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
 
                 loReg(dstReg) = val;
 
-                cpsr = (cpsr & ~Flag_Q) | (sat ? Flag_Q : 0);
+                cpsr |= (sat ? Flag_Q : 0);
 
                 return;
             }
