@@ -2069,6 +2069,13 @@ void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
             loReg(dstReg) = imm;
             return;
         }
+        case 0x6: // MOVT
+        {
+            auto imm = ((opcode >> 4) & 0xF000) |((opcode >> 15) & 0x800) | ((opcode >> 4) & 0x700) | (opcode & 0xFF);
+
+            loReg(dstReg) = imm << 16 | (loReg(dstReg) & 0xFFFF);
+            return;
+        }
         case 0x8: // SSAT
         case 0x9: // SSAT/SSAT16
         {
