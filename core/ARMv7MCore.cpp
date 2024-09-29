@@ -735,7 +735,7 @@ void ARMv7MCore::doTHUMB0708(uint16_t opcode, uint32_t pc)
 
         if(signEx)
         {
-            if(hFlag && !(addr & 1)) // LDRSH, (misaligned gets treated as a byte!)
+            if(hFlag) // LDRSH
             {
                 auto val = readMem16(addr);
                 if(val & 0x8000)
