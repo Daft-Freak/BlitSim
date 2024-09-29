@@ -2317,6 +2317,19 @@ void ARMv7MCore::doTHUMB32BitBranchMisc(uint32_t opcode, uint32_t pc)
             if((sysm >> 3) == 0)
             {
                 // APSR
+                auto opMask = (opcode >> 10) & 3;
+
+                uint32_t mask = 0;
+
+                if(opMask & 1) // GE bits
+                    mask |= Flag_GE0 | Flag_GE1 | Flag_GE2 | Flag_GE3;
+
+                if(opMask & 2) // NZCVQ bits
+                    mask |= Flag_N | Flag_Z | Flag_C | Flag_V | Flag_Q;
+
+                cpsr = (cpsr & ~mask) | (reg(srcReg) & mask);
+
+                return;
             }
             else if((sysm >> 3) == 1)
             {
