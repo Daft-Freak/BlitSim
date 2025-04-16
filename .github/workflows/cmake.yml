@@ -32,12 +32,13 @@ jobs:
             cmake-args: -D32BLIT_DIR=$GITHUB_WORKSPACE/32blit-sdk
             apt-packages: libsdl2-dev libsdl2-image-dev libsdl2-net-dev python3-setuptools
 
-          - os: ubuntu-22.04
-            name: Emscripten
-            release-suffix: WEB
-            cmake-args: -D32BLIT_DIR=$GITHUB_WORKSPACE/32blit-sdk
-            cmake-prefix: emcmake
-            apt-packages: python3-setuptools
+#missing some files
+#          - os: ubuntu-22.04
+#            name: Emscripten
+#            release-suffix: WEB
+#            cmake-args: -D32BLIT_DIR=$GITHUB_WORKSPACE/32blit-sdk
+#            cmake-prefix: emcmake
+#            apt-packages: python3-setuptools
 
     runs-on: ${{matrix.os}}
 
