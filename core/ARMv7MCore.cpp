@@ -360,7 +360,8 @@ void ARMv7MCore::doTHUMB0102(uint16_t opcode, uint32_t pc)
 
         uint32_t carry, overflow;
 
-        cpsr &= 0x0FFFFFFF;
+        if(!inIT())
+            cpsr &= 0x0FFFFFFF;
 
         if(isSub)
         {
