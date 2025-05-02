@@ -2513,7 +2513,8 @@ void ARMv7MCore::doTHUMB32BitLoadByteHint(uint32_t opcode, uint32_t pc)
 
     if(dstReg == Reg::PC) // preload
     {
-
+        // this is a hint
+        return;
     }
     else if(baseReg == Reg::PC) // LDR(S)B (literal)
     {}
