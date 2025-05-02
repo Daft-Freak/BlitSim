@@ -15,6 +15,7 @@ ARMv7MCore cpuCore(mem);
 
 static bool fileLoaded = false;
 static uint32_t homeDownTime = 0;
+static bool menuOpen = false;
 
 static BlitGameHeader blitHeader;
 
@@ -113,6 +114,16 @@ void render(uint32_t time)
         blit::screen.pen = {255, 255, 255};
         blit::screen.text("Waiting...", blit::minimal_font, blit::screen.clip, true, blit::TextAlign::center_center);
     }
+    else if(menuOpen)
+    {
+        // fake menu overlay
+        // TODO: palette mode?
+        blit::screen.pen = {50, 50, 50, 200};
+        blit::screen.clear();
+
+        blit::screen.pen = {255, 255, 255};
+        blit::screen.text("Menu is open", blit::minimal_font, blit::screen.clip, true, blit::TextAlign::center_center);
+    }
 }
 
 void update(uint32_t time)
@@ -125,6 +136,11 @@ void update(uint32_t time)
         homeDownTime = 0;
         launchFile = "launcher.blit";
     }
+    else if(blit::buttons.released & blit::Button::HOME)
+    {
+        homeDownTime = 0;
+        menuOpen = !menuOpen;
+    }
 
     // avoid catch-up logic (emulated tick will also do it)
     if(blit::now() - time >= 20)
@@ -132,6 +148,9 @@ void update(uint32_t time)
 
     // sync inputs
     syncInput();
+
+    if(menuOpen)
+        return;
 
     // this isn't update, it's the layer above
     if(fileLoaded && !cpuCore.getPaused())
