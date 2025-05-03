@@ -3574,6 +3574,23 @@ void ARMv7MCore::doVFPDataProcessing(uint32_t opcode, uint32_t pc, bool dWidth)
                         return;
                     }
                 }
+                else if(opc2 == 6) // VRINTZ/VRINTR
+                {
+                    assert(opc3 & 1);
+                    auto op = opcode & (1 << 7);
+
+                    auto d = getVReg(12, 22, dWidth);
+                    auto m = getVReg(0, 5, dWidth);
+
+                    if(op) // VRINTZ
+                    {
+                        if(dWidth)
+                            dReg(d) = trunc(dReg(m));
+                        else
+                            sReg(d) = truncf(sReg(m));
+                        return;
+                    }
+                }
                 else if(opc2 == 7 && opc3 == 3) // VCVT (single <-> double)
                 {
                     auto d = getVReg(12, 22, !dWidth);
