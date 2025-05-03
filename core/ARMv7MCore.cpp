@@ -3278,6 +3278,31 @@ void ARMv7MCore::doVFPDataProcessing(uint32_t opcode, uint32_t pc, bool dWidth)
             
             return;
         }
+        else if((opc1 & 0b1011) == 0b1000)
+        {
+            // VMAXNM/VMINMN
+            assert(!(opc3 & 1));
+            auto n = getVReg(16, 7, dWidth);
+            auto d = getVReg(12, 22, dWidth);
+            auto m = getVReg(0, 5, dWidth);
+            auto op = opcode & (1 << 6);
+
+            if(op) // VMINNM
+            {
+                if(dWidth)
+                    dReg(d) = std::min(dReg(n), dReg(m));
+                else
+                    sReg(d) = std::min(sReg(n), sReg(m));
+            }
+            else // VMAXNM
+            {
+                if(dWidth)
+                    dReg(d) = std::max(dReg(n), dReg(m));
+                else
+                    sReg(d) = std::max(sReg(n), sReg(m));
+            }
+            return;
+        }
         else if((opc1 & 0b1011) == 0b1011)
         {
             if((opc2 & 0b1100) == 0b1000) // VRINT[ANPM]
