@@ -703,47 +703,59 @@ uint32_t firmwareMemWrite(uint32_t addr, uint32_t val, int width)
     return val;
 }
 
+static bool tryScreenHook(uint32_t addr)
+{
+    auto data = mem.read<uint32_t>(addr);
+
+    // first word should be framebuffer address
+    if(data != fbAddr)
+        return false;
+
+    // check bounds/format to be sure
+    auto w = mem.read<uint32_t>(addr + 4);
+    auto h = mem.read<uint32_t>(addr + 8);
+    auto fmt = mem.read<uint32_t>(addr + 36);
+
+    if(blit::screen.bounds == blit::Size(w, h) && blit::screen.format == static_cast<blit::PixelFormat>(fmt))
+    {
+        // TODO: need to re-patch whenever screen mode changes
+        gameScreenPtr = addr;
+
+        origPBF = mem.read<uint32_t>(addr + 60);
+        origBBF = mem.read<uint32_t>(addr + 64);
+
+        // extra check, make sure the old pointers point to flash
+        if((origPBF & 0xFE000000) != 0x90000000 || (origBBF & 0xFE000000) != 0x90000000)
+            return false;
+
+        blit::debugf("patching screen at %x\n", addr);
+
+        mem.write<uint32_t>(addr + 60, 0x08BA1001); // overwrite pbf
+        mem.write<uint32_t>(addr + 64, 0x08BA1003); // overwrite bbf
+
+        emuScreen = blit::Surface(mem.mapAddress(fbAddr), blit::screen.format, blit::screen.bounds);
+        emuScreen.palette = reinterpret_cast<blit::Pen *>(mem.mapAddress(paletteAddr));
+        return true;
+    }
+
+    return false;
+}
+
 void hookScreenBlend()
 {
-    // attempt to find blit::screen
-    auto ram = mem.mapAddress(0x20000400);
-
-    // assume 4 byte alignment in .data
-    for(int off = 0; off < 127 * 1024; off += 4)
+    // attempt to find screen
+    // there's a reference to this in .data before SDK v 0.3.3
+    auto ram = mem.mapAddress(0x24000000); //.bss
+    // assume 4 byte alignment
+    // also hope it's early (seems more likely with the new SDK)
+    for(int off = 0; off < 362 * 1024; off += 4)
     {
-        // look for D1 addrs (blit::screen is a reference)
-        if(ram[off + 3] != 0x24)
+        // look for the right region
+        if(ram[off + 3] != fbAddr >> 24)
             continue;
 
-        uint32_t addr = *reinterpret_cast<uint32_t *>(ram + off);
-
-        auto data = mem.read<uint32_t>(addr);
-
-        // first word should be framebuffer address
-        if(data != fbAddr)
-            continue;
-
-        // check bounds/format to be sure
-        auto w = mem.read<uint32_t>(addr + 4);
-        auto h = mem.read<uint32_t>(addr + 8);
-        auto fmt = mem.read<uint32_t>(addr + 36);
-
-        if(blit::screen.bounds == blit::Size(w, h) && blit::screen.format == static_cast<blit::PixelFormat>(fmt))
-        {
-            // TODO: need to re-patch whenever screen mode changes
-            blit::debugf("patching screen at %x\n", addr);
-            gameScreenPtr = addr;
-
-            origPBF = mem.read<uint32_t>(addr + 60);
-            origBBF = mem.read<uint32_t>(addr + 64);
-
-            mem.write<uint32_t>(addr + 60, 0x08BA1001); // overwrite pbf
-            mem.write<uint32_t>(addr + 64, 0x08BA1003); // overwrite bbf
-
-            emuScreen = blit::Surface(mem.mapAddress(fbAddr), blit::screen.format, blit::screen.bounds);
-            emuScreen.palette = reinterpret_cast<blit::Pen *>(mem.mapAddress(paletteAddr));
+        if(tryScreenHook(0x24000000 + off))
             break;
-        }
     }
 }
 
