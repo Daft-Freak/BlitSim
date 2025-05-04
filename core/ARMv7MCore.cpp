@@ -3284,7 +3284,6 @@ void ARMv7MCore::doVFPDataProcessing(uint32_t opcode, uint32_t pc, bool dWidth)
         else if((opc1 & 0b1011) == 0b1000)
         {
             // VMAXNM/VMINMN
-            assert(!(opc3 & 1));
             auto n = getVReg(16, 7, dWidth);
             auto d = getVReg(12, 22, dWidth);
             auto m = getVReg(0, 5, dWidth);
