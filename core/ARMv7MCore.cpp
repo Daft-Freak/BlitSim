@@ -2782,7 +2782,10 @@ void ARMv7MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
                          | ((sum[2] >= 0x100) ? Flag_GE2 : 0)
                          | ((sum[3] >= 0x100) ? Flag_GE3 : 0);
 
-                    return;
+                    if((op2 & 3) == 0) // FIXME: otherwise this is UQADD8/UHADD8 and we just did the wrokg thing
+                        return;
+
+                    break;
                 }
                 //1: U*ADD16
                 //2: U*ASX
