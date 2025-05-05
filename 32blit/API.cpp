@@ -48,7 +48,7 @@ struct TypeHandler
 static std::map<std::string, TypeHandler> typeHandlers;
 
 // screen speed hacks
-static uint32_t gameScreenPtr;
+static uint32_t gameScreenPtr = 0;
 static uint32_t origPBF, origBBF;
 static blit::Surface emuScreen(nullptr, blit::PixelFormat::P, {0, 0});
 
@@ -537,6 +537,9 @@ void apiCallback(int index, uint32_t *regs)
         {
             auto inTemp = reinterpret_cast<blithw::SurfaceTemplate *>(mem.mapAddress(regs[1]));
 
+            [[maybe_unused]]
+            auto oldFormat = screen.format;
+
             SurfaceTemplate temp{nullptr, {inTemp->bounds.w, inTemp->bounds.h}, static_cast<PixelFormat>(inTemp->format), nullptr};
             regs[0] = api.set_screen_mode_format(static_cast<ScreenMode>(regs[0]), temp);
 
@@ -550,6 +553,21 @@ void apiCallback(int index, uint32_t *regs)
             inTemp->format = static_cast<blithw::PixelFormat>(temp.format);
             if(temp.palette)
                 inTemp->palette = paletteAddr;
+
+#ifdef SCREEN_SPEED_HACKS
+            if(gameScreenPtr)
+            {
+                // can't handle format changes as we don't know what the new blend funcs are
+                // (this wouldn't be a problem if we didn't have the fallback for masks)
+                if(temp.format == oldFormat)
+                {
+                    inTemp->pen_blend = 0x08BA1001;
+                    inTemp->blit_blend = 0x08BA1003;
+                }
+                else
+                    blit::debugf("screen format changed, losing speed hacks\n");
+            }
+#endif
 
             break;
         }
