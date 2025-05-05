@@ -804,6 +804,11 @@ void hookScreenBlend()
     }
 }
 
+void resetScreenHooks()
+{
+    gameScreenPtr = 0;
+}
+
 void syncInput()
 {
     auto api = reinterpret_cast<blithw::API *>(mem.mapAddress(0xF800));

@@ -61,6 +61,10 @@ static bool openFile(const std::string &filename)
         return false;
     }
 
+#ifdef SCREEN_SPEED_HACKS
+    resetScreenHooks();
+#endif
+
     mem.setFirmwareRAMCallbacks(firmwareMemRead, firmwareMemWrite);
 
     for(int i = 0; i < CHANNEL_COUNT; i++)
