@@ -252,7 +252,6 @@ void apiCallback(int index, uint32_t *regs)
         case 9: // close_file
         {
             auto &file = fileMap.at(regs[0]);
-            fileMap.erase(regs[0]);
 
             if(file.isRemote)
                 regs[0] = closeRemoteFile(file.fh);
@@ -269,6 +268,7 @@ void apiCallback(int index, uint32_t *regs)
                 }
 #endif
             }
+            fileMap.erase(regs[0]);
             break;
         }
 
