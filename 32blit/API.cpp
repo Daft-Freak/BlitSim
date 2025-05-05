@@ -48,7 +48,6 @@ struct TypeHandler
 static std::map<std::string, TypeHandler> typeHandlers;
 
 // screen speed hacks
-static uint32_t gameScreenPtr = 0;
 static blit::Surface emuScreen(nullptr, blit::PixelFormat::P, {0, 0});
 
 // firmware ram in D2
@@ -553,12 +552,16 @@ void apiCallback(int index, uint32_t *regs)
             if(temp.palette)
                 inTemp->palette = paletteAddr;
 
-            // if we know where the screen is, we can apply the patched blend funcs
-            if(gameScreenPtr)
-            {
-                inTemp->pen_blend = 0x08BA1001;
-                inTemp->blit_blend = 0x08BA1003;
-            }
+#ifdef SCREEN_SPEED_HACKS
+            debugf("overriding screen blend funcs in set_screen_mode\n");
+
+            emuScreen = Surface(mem.mapAddress(fbAddr), screen.format, screen.bounds);
+            emuScreen.palette = reinterpret_cast<Pen *>(mem.mapAddress(paletteAddr));
+
+            // apply the patched blend funcs
+            inTemp->pen_blend = 0x08BA1001;
+            inTemp->blit_blend = 0x08BA1003;
+#endif
 
             break;
         }
@@ -614,7 +617,8 @@ void apiCallback(int index, uint32_t *regs)
 
         case 2048: // patched screen.pbf
         {
-            auto maskPtr = mem.read<uint32_t>(gameScreenPtr + 44);
+            auto screenPtr = regs[1];
+            auto maskPtr = mem.read<uint32_t>(screenPtr + 44);
             Surface maskTmp(nullptr, PixelFormat::M, {0, 0});
 
             // wrap mask
@@ -627,7 +631,7 @@ void apiCallback(int index, uint32_t *regs)
             }
 
             auto pen = mem.read<uint32_t>(regs[0]);
-            emuScreen.alpha = mem.read<uint8_t>(gameScreenPtr + 28);
+            emuScreen.alpha = mem.read<uint8_t>(screenPtr + 28);
             emuScreen.pbf(reinterpret_cast<Pen *>(&pen), &emuScreen, regs[2], regs[3]);
             emuScreen.mask = nullptr;
 
@@ -635,7 +639,8 @@ void apiCallback(int index, uint32_t *regs)
         }
         case 2049: // patched screen.bbf
         {
-            auto maskPtr = mem.read<uint32_t>(gameScreenPtr + 44);
+            auto screenPtr = regs[2];
+            auto maskPtr = mem.read<uint32_t>(screenPtr + 44);
             Surface maskTmp(nullptr, PixelFormat::M, {0, 0});
 
             // wrap mask
@@ -662,7 +667,7 @@ void apiCallback(int index, uint32_t *regs)
             if(srcFormat == PixelFormat::P)
                 src.palette = reinterpret_cast<Pen *>(mem.mapAddress(srcPtr[12]));
 
-            emuScreen.alpha = mem.read<uint8_t>(gameScreenPtr + 28);
+            emuScreen.alpha = mem.read<uint8_t>(screenPtr + 28);
             emuScreen.bbf(&src, regs[1], &emuScreen, regs[3], cnt, srcStep);
         
             emuScreen.mask = nullptr;
@@ -749,14 +754,13 @@ static bool tryScreenHook(uint32_t addr)
         auto curBBF = mem.read<uint32_t>(addr + 64);
 
         // make sure we haven't already patched
-        if(curPBF != 0x08BA1001 && curBBF != 0x08BA1003)
-        {
-            // extra check, make sure the old pointers point to flash (or the patched addr to handle launches)
-            if((curPBF & 0xFE000000) != 0x90000000 || (curBBF & 0xFE000000) != 0x90000000)
-                return false;
-        }
+        if(curPBF == 0x08BA1001 && curBBF == 0x08BA1003)
+            return true;
 
-        gameScreenPtr = addr;
+        // extra check, make sure the old pointers point to flash (or the patched addr to handle launches)
+        if((curPBF & 0xFE000000) != 0x90000000 || (curBBF & 0xFE000000) != 0x90000000)
+            return false;
+
         blit::debugf("patching screen at %x\n", addr);
 
         mem.write<uint32_t>(addr + 60, 0x08BA1001); // overwrite pbf
@@ -772,7 +776,7 @@ static bool tryScreenHook(uint32_t addr)
 
 void hookScreenBlend()
 {
-    gameScreenPtr = 0;
+    // this only needs to do anything for old blits that don't use api.set_screen_mode_format (with the blend funcs in the output)
 
     // attempt to find screen
     // there's a reference to this in .data before SDK v 0.3.3
@@ -788,11 +792,6 @@ void hookScreenBlend()
         if(tryScreenHook(0x24000000 + off))
             break;
     }
-}
-
-void resetScreenHooks()
-{
-    gameScreenPtr = 0;
 }
 
 void syncInput()

@@ -13,6 +13,5 @@ uint32_t firmwareMemRead(uint32_t addr, uint32_t val, int width);
 uint32_t firmwareMemWrite(uint32_t addr, uint32_t val, int width);
 
 void hookScreenBlend();
-void resetScreenHooks();
 
 void syncInput();
