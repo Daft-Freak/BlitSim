@@ -737,15 +737,22 @@ static bool tryScreenHook(uint32_t addr)
     if(blit::screen.bounds == blit::Size(w, h) && blit::screen.format == static_cast<blit::PixelFormat>(fmt))
     {
         // TODO: need to re-patch whenever screen mode changes
+
+        auto curPBF = mem.read<uint32_t>(addr + 60);
+        auto curBBF = mem.read<uint32_t>(addr + 64);
+
+        // make sure we haven't already patched
+        if(curPBF != 0x08BA1001 && curBBF != 0x08BA1003)
+        {
+            // extra check, make sure the old pointers point to flash (or the patched addr to handle launches)
+            if((curPBF & 0xFE000000) != 0x90000000 || (curBBF & 0xFE000000) != 0x90000000)
+                return false;
+
+            origPBF = curPBF;
+            origBBF = curBBF;
+        }
+
         gameScreenPtr = addr;
-
-        origPBF = mem.read<uint32_t>(addr + 60);
-        origBBF = mem.read<uint32_t>(addr + 64);
-
-        // extra check, make sure the old pointers point to flash
-        if((origPBF & 0xFE000000) != 0x90000000 || (origBBF & 0xFE000000) != 0x90000000)
-            return false;
-
         blit::debugf("patching screen at %x\n", addr);
 
         mem.write<uint32_t>(addr + 60, 0x08BA1001); // overwrite pbf
@@ -761,6 +768,8 @@ static bool tryScreenHook(uint32_t addr)
 
 void hookScreenBlend()
 {
+    gameScreenPtr = 0;
+
     // attempt to find screen
     // there's a reference to this in .data before SDK v 0.3.3
     auto ram = mem.mapAddress(0x24000000); //.bss
