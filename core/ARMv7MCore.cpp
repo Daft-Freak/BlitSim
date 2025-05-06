@@ -2083,8 +2083,41 @@ void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
             auto imm = ((opcode >> 6) & 3) | ((opcode >> 10) & 0x1C);
             auto satTo = (opcode & 0x1F) + 1;
 
+            bool sat = false;
+
+            auto max = (1 << (satTo - 1)) - 1;
+            auto min = -(1 << (satTo - 1));
+
             if(op == 9 && imm == 0) // SSAT16
-            {}
+            {
+                // two 16-bit vals
+                auto val1 = static_cast<int16_t>(loReg(nReg) & 0xFFFF);
+                auto val2 = static_cast<int16_t>(loReg(nReg) >> 16);
+
+                if(val1 > max)
+                {
+                    val1 = max;
+                    sat = true;
+                }
+                else if(val1 < min)
+                {
+                    val1 = min;
+                    sat = true;
+                }
+
+                if(val2 > max)
+                {
+                    val2 = max;
+                    sat = true;
+                }
+                else if(val2 < min)
+                {
+                    val2 = min;
+                    sat = true;
+                }
+
+                loReg(dstReg) = (val1 & 0xFFFF) | val2 << 16;
+            }
             else // SSAT
             {
                 auto val = static_cast<int32_t>(reg(nReg));
@@ -2096,11 +2129,6 @@ void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
                     assert(imm);
                     val = val >> imm;
                 }
-
-                bool sat = false;
-
-                auto max = (1 << (satTo - 1)) - 1;
-                auto min = -(1 << (satTo - 1));
 
                 if(val > max)
                 {
@@ -2114,12 +2142,10 @@ void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
                 }
 
                 loReg(dstReg) = val;
-
-                cpsr |= (sat ? Flag_Q : 0);
-
-                return;
             }
-            break;
+
+            cpsr |= (sat ? Flag_Q : 0);
+            return;
         }
         case 0xA: // SBFX
         {
@@ -2159,8 +2185,40 @@ void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
             auto imm = ((opcode >> 6) & 3) | ((opcode >> 10) & 0x1C);
             auto satTo = (opcode & 0x1F);
 
+            bool sat = false;
+
+            auto max = (1 << satTo) - 1;
+
             if(op == 0xD && imm == 0) // USAT16
-            {}
+            {
+                // two 16-bit vals
+                auto val1 = static_cast<int16_t>(loReg(nReg) & 0xFFFF);
+                auto val2 = static_cast<int16_t>(loReg(nReg) >> 16);
+
+                if(val1 > max)
+                {
+                    val1 = max;
+                    sat = true;
+                }
+                else if(val1 < 0)
+                {
+                    val1 = 0;
+                    sat = true;
+                }
+
+                if(val2 > max)
+                {
+                    val2 = max;
+                    sat = true;
+                }
+                else if(val2 < 0)
+                {
+                    val2 = 0;
+                    sat = true;
+                }
+
+                loReg(dstReg) = val1 | val2 << 16;
+            }
             else // USAT
             {
                 auto val = static_cast<int32_t>(reg(nReg));
@@ -2172,10 +2230,6 @@ void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
                     assert(imm);
                     val = val >> imm;
                 }
-
-                bool sat = false;
-
-                auto max = (1 << satTo) - 1;
 
                 if(val > max)
                 {
@@ -2189,12 +2243,10 @@ void ARMv7MCore::doTHUMB32BitDataProcessingPlainImm(uint32_t opcode, uint32_t pc
                 }
 
                 loReg(dstReg) = val;
-
-                cpsr |= (sat ? Flag_Q : 0);
-
-                return;
             }
-            break;
+
+            cpsr |= (sat ? Flag_Q : 0);
+            return;
         }
         case 0xE: // UBFX
         {
