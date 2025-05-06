@@ -1760,6 +1760,20 @@ void ARMv7MCore::doTHUMB32BitDataProcessingShiftedReg(uint32_t opcode, uint32_t 
 
     assert(op != 5 && op != 7 && op != 9 && op != 12 && op != 15); // undefined
 
+    if(op == 6) // PKHBT/TB
+    {
+        assert(!(opcode & (1 << 4)));
+        assert(!(opcode & (1 << 20)));
+
+        bool tb = opcode & (1 << 5);
+
+        if(tb)
+            loReg(dstReg) = (loReg(nReg) & 0xFFFF0000) | (val & 0xFFFF);
+        else
+            loReg(dstReg) = (val & 0xFFFF0000) | (loReg(nReg) & 0xFFFF);
+        return;
+    }
+
     return doDataProcessing(op, nReg, val, dstReg, carry, setFlags);
 }
 
