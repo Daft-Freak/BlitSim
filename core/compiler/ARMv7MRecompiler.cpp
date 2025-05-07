@@ -1374,6 +1374,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                     addInstruction(loadImm(~1u));
                                     addInstruction(alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp2));
                                     addInstruction(jump(GenCondition::Always, GenReg::Temp2, 0));
+
+                                    if(pc > maxBranch)
+                                        done = true;
                                 }
 
                                 genBlock.instructions.back().len = 4;
@@ -1419,6 +1422,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                     addInstruction(loadImm(~1u));
                                     addInstruction(alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp2));
                                     addInstruction(jump(GenCondition::Always, GenReg::Temp2, 0));
+
+                                    if(pc > maxBranch)
+                                        done = true;
                                 }
 
                                 genBlock.instructions.back().len = 4;
