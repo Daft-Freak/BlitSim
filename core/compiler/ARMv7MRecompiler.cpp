@@ -1696,8 +1696,88 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                     }
                     else
                     {
-                        printf("unhandled op in convertToGeneric %08X (dp mod imm)\n", opcode32 & 0xFF008000);
-                        done = true;
+                        auto op = (opcode32 >> 21) & 0xF;
+                        bool setFlags = opcode32 & (1 << 20);
+
+                        auto nReg = (opcode32 >> 16) & 0xF;
+                        auto dstReg = (opcode32 >> 8) & 0xF;
+
+                        auto imm = ((opcode32 >> 12) & 7) | ((opcode32 >> 23) & 8);
+                        auto val8 = opcode32 & 0xFF;
+
+                        // get the modified imm
+                        uint32_t val;
+
+                        switch(imm)
+                        {
+                            case 0:
+                                val = val8;
+                                break;
+                            case 1:
+                                val = val8 | val8 << 16;
+                                break;
+                            case 2:
+                                val = val8 << 8 | val8 << 24;
+                                break;
+                            case 3:
+                                val = val8 | val8 << 8 | val8 << 16 | val8 << 24;
+                                break;
+                            default:
+                            {
+                                //ROR
+                                int rot = imm << 1 | val8 >> 7;
+                                val = (val8 & 0x7F) | 0x80;
+
+                                val = (val >> rot) | (val << (32 - rot));
+                                bool carry = val & (1 << 31);
+
+                                if(setFlags && op < 8/*not add/sub*/)
+                                {
+                                    // update carry from shift if not something that sets it
+                                    if(carry)
+                                    {
+                                        addInstruction(loadImm(ARMv7MCore::Flag_C));
+                                        addInstruction(alu(GenOpcode::Or, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
+                                    }
+                                    else
+                                    {
+                                        addInstruction(loadImm(~ARMv7MCore::Flag_C));
+                                        addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
+                                    }
+                                }
+
+                                break;
+                            }
+                        }
+
+                        switch(op)
+                        {
+                            case 0x0: // AND/TST
+                            {
+                                auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is TST
+                                addInstruction(loadImm(val));
+                                addInstruction(alu(GenOpcode::And, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                                break;
+                            }
+                            case 0xD: // SUB/CMP
+                            {
+                                auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is CMP
+                                addInstruction(loadImm(val));
+                                addInstruction(alu(GenOpcode::Subtract, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                                break;
+                            }
+                            case 0xE: // RSB
+                            {
+                                assert(dstReg != 15);
+                                auto dst = reg(dstReg);
+                                addInstruction(loadImm(val));
+                                addInstruction(alu(GenOpcode::Subtract, GenReg::Temp, reg(nReg), dst), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                                break;
+                            }
+                            default:
+                                printf("unhandled dp (mod imm) op in convertToGeneric %i\n", op);
+                                done = true;
+                        }
                     }
                 }
                 else if(op1 == 0b11111)
