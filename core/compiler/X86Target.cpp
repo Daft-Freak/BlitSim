@@ -554,7 +554,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
         };
 
         // helpers to deal with restrictions
-        auto checkSingleSource = [this, &builder, &err, &instr, &checkReg32](bool canSwapSrcs = false)
+        auto checkSingleSource = [this, &builder, &err, &instr, &checkReg32, &checkValue32](bool canSwapSrcs = false)
         {
             if(instr.src[0] != instr.dst[0])
             {
@@ -563,8 +563,8 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                 if(!sourceInfo.registers[instr.dst[0]].aliasMask && !sourceInfo.registers[instr.src[0]].aliasMask)
                 {
-                    auto dst = checkReg32(instr.dst[0]);
-                    if(dst && instr.src[1] == instr.dst[0] && instr.opcode != GenOpcode::Not)
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
+                    if(dst.index() && instr.src[1] == instr.dst[0] && instr.opcode != GenOpcode::Not)
                     {
                         // dest is the second source, save it and replace the source
                         assert(instr.dst[0]); // it's already a temp
@@ -579,7 +579,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         else
                         {
                             // save dest in temp and use as second source
-                            builder.mov(*tmp, *dst);
+                            builder.mov(*tmp, std::get<RMOperand>(dst));
                             instr.src[1] = 0;
                         }
                     }
@@ -587,9 +587,9 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                     // move src0 to dst
                     auto src = checkReg32(instr.src[0], Reg32::R8D);
 
-                    if(src && dst)
+                    if(src && dst.index())
                     {
-                        builder.mov(*dst, *src);
+                        builder.mov(std::get<RMOperand>(dst), *src);
                         return false;
                     }
                 }
