@@ -1745,7 +1745,16 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         auto op2 = (opcode32 >> 6) & 0x3F;
 
                         auto baseReg = reg((opcode32 >> 16) & 0xF);
-                        auto dstReg = reg((opcode32 >> 12) & 0xF);
+                        int dst = (opcode32 >> 12) & 0xF;
+
+                        if(dst == 15)
+                        {
+                            printf("unhandled str pc in convertToGeneric %08X\n", opcode32 & 0xFFF00000);
+                            done = true;
+                            break;
+                        }
+
+                        auto dstReg = reg(dst);
 
                         int width = 1 << (op1 & 3);
 
