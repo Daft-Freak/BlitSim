@@ -753,18 +753,16 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             if(instr.opcode == GenOpcode::Load2 && (instr.flags & GenOp_SignExtend))
                                 builder.movsx(*dst, Reg16::AX);
                             else if(dst)
-                            {
-                                if(*dst == Reg32::EAX)
-                                {
-                                    // discard old RAX
-                                    builder.pop(Reg64::R10);
-                                    needCallRestore = 0;
-                                }
-                                else
-                                    builder.mov(*dst, Reg32::EAX);
-                            }
+                                builder.mov(*dst, Reg32::EAX);
                             else // "extra"/high reg
                                 storeExtraReg32(instr.dst[0], Reg32::EAX);
+
+                            if(dst && *dst == Reg32::EAX)
+                            {
+                                // discard old RAX
+                                builder.pop(Reg64::R10);
+                                needCallRestore = 0;
+                            }
                         }
                     }
                 }
