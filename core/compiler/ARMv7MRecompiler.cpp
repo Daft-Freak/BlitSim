@@ -1730,13 +1730,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 // write back adjusted base
                                 if(writeback)
                                 {
-                                    if(!index) // adjust now if not done yet
-                                    {
-                                        addInstruction(loadImm(add ? offset : -offset));
-                                        addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, reg(baseReg)), isPC ? 0 : 4);
-                                    }
-                                    else
-                                        addInstruction(move(GenReg::Temp, reg(baseReg)), isPC ? 0 : 4); // can probably avoid this
+                                    // need to redo add even if index is true (can't reuse the temp)
+                                    addInstruction(loadImm(add ? offset : -offset));
+                                    addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, reg(baseReg)), isPC ? 0 : 4);
                                 }
                             }
 
