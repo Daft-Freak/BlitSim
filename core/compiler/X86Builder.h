@@ -232,8 +232,10 @@ public:
     void or_(Reg32 dst, Reg32 src);
     void or_(Reg16 dst, Reg16 src);
     void or_(Reg8 dst, Reg8 src);
+    void or_(RMOperand dst, Reg32 src);
     void or_(Reg32 dst, uint32_t imm);
     void or_(Reg8 dst, uint8_t imm);
+    void or_(RMOperand dst, uint32_t imm);
 
     void pop(Reg64 r);
 
