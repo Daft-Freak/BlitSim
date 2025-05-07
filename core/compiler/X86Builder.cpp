@@ -153,7 +153,7 @@ void X86Builder::adc(Reg8 dst, uint8_t imm)
 // reg -> reg
 void X86Builder::and_(Reg32 dst, Reg32 src)
 {
-    and_(RMOperand(src), dst);
+    and_(RMOperand(dst), src);
 }
 
 // reg -> reg, 16 bit
