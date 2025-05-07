@@ -801,36 +801,12 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         
                         if(instr.opcode == GenOpcode::Store)
                         {
-                            // TODO: this is mostly checkRegOrImm8, without the check
-                            std::variant<std::monostate, Reg8, uint8_t> data;
+                            auto data = mapReg8(instr.src[1]);
 
-                            if(instr.src[1] == 0)
-                            {
-                                if(auto imm = getLastImmLoad())
-                                {
-                                    assert(!(*imm & 0xFFFFFF00));
-                                    data = static_cast<uint8_t>(*imm);
-                                }
-                            }
-
-                            if(!data.index())
-                                data = *mapReg8(instr.src[1]);
-
-                            if(std::holds_alternative<Reg8>(data))
-                            {
-#ifdef _WIN32
-                                // argumentRegs[2] is R8, can't mov from xH to there
-                                auto reg8 = std::get<Reg8>(data);
-                                if(isXHReg(reg8))
-                                {
-                                    builder.mov(Reg8::AL, reg8);
-                                    data = Reg8::AL;
-                                }
-#endif
-                                builder.movzx(argumentRegs32[2], std::get<Reg8>(data));
-                            }
+                            if(!data)
+                                loadExtraReg32(instr.src[1], argumentRegs32[2]);
                             else
-                                builder.mov(argumentRegs32[2], std::get<uint8_t>(data));
+                                builder.movzx(argumentRegs32[2], *data);
                         }
                         else
                         {
