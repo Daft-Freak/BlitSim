@@ -660,6 +660,13 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 printf("unhandled add pc in convertToGeneric %i -> %i\n", srcReg, dstReg);
                                 done = true;
                             }
+                            else if(dstReg == 13) // dest SP
+                            {
+                                addInstruction(alu(GenOpcode::Add, reg(dstReg), reg(srcReg), reg(dstReg), pcSCycles));
+                                // mask out low bits
+                                addInstruction(loadImm(~3u));
+                                addInstruction(alu(GenOpcode::And, reg(dstReg), GenReg::Temp, reg(dstReg)), 2);
+                            }
                             else
                                 addInstruction(alu(GenOpcode::Add, reg(dstReg), reg(srcReg), reg(dstReg), pcSCycles), 2);
                             break;
@@ -690,6 +697,13 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 addInstruction(jump(GenCondition::Always, GenReg::Temp, pcNCycles + pcSCycles * 2), 2);
                                 if(pc > maxBranch)
                                     done = true;
+                            }
+                            else if(dstReg == 13) // dest SP
+                            {
+                                addInstruction(move(reg(srcReg), reg(dstReg), pcSCycles));
+                                // mask out low bits
+                                addInstruction(loadImm(~3u));
+                                addInstruction(alu(GenOpcode::And, reg(dstReg), GenReg::Temp, reg(dstReg)), 2);
                             }
                             else
                                 addInstruction(move(reg(srcReg), reg(dstReg), pcSCycles), 2);
@@ -977,9 +991,17 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
                         switch((opcode >> 6) & 3)
                         {
-                            //case 0x0: // SXTH
-                            //case 0x1: // SXTB
-
+                            case 0x0: // SXTH
+                            case 0x1: // SXTB
+                            {
+                                GenOpInfo extOp{};
+                                extOp.opcode = ((opcode >> 6) & 3) == 0 ? GenOpcode::SignExtend16 : GenOpcode::SignExtend8;
+                                extOp.cycles = pcSCycles;
+                                extOp.src[0] = static_cast<uint8_t>(srcReg);
+                                extOp.dst[0] = static_cast<uint8_t>(dstReg);
+                                addInstruction(extOp, 2);
+                                break;
+                            }
                             case 0x2: // UXTH
                                 addInstruction(loadImm(0xFFFF));
                                 addInstruction(alu(GenOpcode::And, srcReg, GenReg::Temp, dstReg, pcSCycles), 2);
@@ -988,9 +1010,6 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 addInstruction(loadImm(0xFF));
                                 addInstruction(alu(GenOpcode::And, srcReg, GenReg::Temp, dstReg, pcSCycles), 2);
                                 break;
-                            default:
-                                done = true;
-                                printf("unhandled op in convertToGeneric %04X\n", opcode & 0xFFC0);
                         }
 
                         break;
