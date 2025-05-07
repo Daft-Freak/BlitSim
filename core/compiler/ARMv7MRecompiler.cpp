@@ -1789,8 +1789,8 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
                             // base + off << shift
                             addInstruction(loadImm(shift));
-                            addInstruction(alu(GenOpcode::ShiftLeft, offReg, GenReg::Temp, GenReg::Temp));
-                            addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, GenReg::Temp));
+                            addInstruction(alu(GenOpcode::ShiftLeft, offReg, GenReg::Temp, GenReg::Temp2));
+                            addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp2, GenReg::Temp));
 
                             // do the store
                             addInstruction(store(width, GenReg::Temp, dstReg, 0), 4);
