@@ -1759,6 +1759,15 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 addInstruction(alu(GenOpcode::And, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
                                 break;
                             }
+                            case 0x2: // MOV/ORR
+                            {
+                                addInstruction(loadImm(val));
+                                if(nReg == 15) // MOV
+                                    addInstruction(move(GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                                else // ORR
+                                    addInstruction(alu(GenOpcode::Or, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                                break;
+                            }
                             case 0x8: // ADD/CMN
                             {
                                 addInstruction(loadImm(val));
