@@ -789,7 +789,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             addInstruction(alu(GenOpcode::Or, dstReg, srcReg, dstReg, pcSCycles), 2, preserveV | preserveC | writeZ | writeN);
                             break;
                         case 0xD: // MUL
-                            addInstruction(alu(GenOpcode::Multiply, dstReg, srcReg, dstReg, pcSCycles), 2, preserveV | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::Multiply, dstReg, srcReg, dstReg, pcSCycles), 2, preserveV | preserveC | writeZ | writeN);
                             break;
                         case 0xE: // BIC
                         {
