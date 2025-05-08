@@ -677,7 +677,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                 if(addrSize == 32)
                 {
-                    auto dst = checkReg32(instr.dst[0], {}, instr.opcode == GenOpcode::Load4);
+                    auto dst = checkReg32(instr.dst[0], {}, true);
                     auto addr = checkValue32(instr.src[0], Value_Immediate | Value_Memory);
 
                     if(addr.index())
@@ -712,12 +712,13 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             callRestoreIfNeeded(builder, static_cast<Reg32>(callSavedRegs[1]), needCallRestore);
 
                         if(instr.opcode == GenOpcode::Load && (instr.flags & GenOp_SignExtend))
-                            builder.movsx(*dst, Reg8::AL);
+                            builder.movsx(dst ? *dst : Reg32::EAX, Reg8::AL);
                         if(instr.opcode == GenOpcode::Load2 && (instr.flags & GenOp_SignExtend))
-                            builder.movsx(*dst, Reg16::AX);
+                            builder.movsx(dst ? *dst : Reg32::EAX, Reg16::AX);
                         else if(dst)
                             builder.mov(*dst, Reg32::EAX);
-                        else // "extra"/high reg
+
+                        if(!dst) // "extra"/high reg
                             storeExtraReg32(instr.dst[0], Reg32::EAX);
 
                         if(dst && *dst == Reg32::EAX)
