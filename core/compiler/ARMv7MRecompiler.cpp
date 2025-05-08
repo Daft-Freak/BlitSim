@@ -148,7 +148,7 @@ inline GenOpInfo jump(GenCondition cond = GenCondition::Always, GenReg src = Gen
 }
 
 // helper to add instruction to block
-static void addInstruction(GenBlockInfo &genBlock, GenOpInfo op, uint8_t len, uint16_t flags)
+static void addInstruction(GenBlockInfo &genBlock, GenOpInfo op, uint8_t len = 0, uint16_t flags = 0)
 {
     if(flags & GenOp_Exit)
         assert(op.opcode == GenOpcode::Jump);
@@ -177,7 +177,30 @@ static void addInstruction(GenBlockInfo &genBlock, GenOpInfo op, uint8_t len, ui
     op.len = len;
     op.flags = flags;
     genBlock.instructions.emplace_back(std::move(op));
-};
+}
+
+// common patterns
+void loadWithOffset(GenBlockInfo &genBlock, int size, GenReg base, int offset, GenReg dst, int cycles, int len = 0, int flags = 0)
+{
+    if(offset)
+    {
+        addInstruction(genBlock, loadImm(offset));
+        addInstruction(genBlock, alu(GenOpcode::Add, base, GenReg::Temp, GenReg::Temp));
+    }
+
+    addInstruction(genBlock, load(size, offset ? GenReg::Temp : base, dst, cycles), len, flags);
+}
+
+void storeWithOffset(GenBlockInfo &genBlock, int size, GenReg base, int offset, GenReg dst, int cycles, int len = 0, int flags = 0)
+{
+    if(offset)
+    {
+        addInstruction(genBlock, loadImm(offset));
+        addInstruction(genBlock, alu(GenOpcode::Add, base, GenReg::Temp, GenReg::Temp));
+    }
+
+    addInstruction(genBlock, store(size, offset ? GenReg::Temp : base, dst, cycles), len, flags);
+}
 
 // register mapping
 uint16_t getRegOffset(void *cpuPtr, uint8_t reg)
@@ -503,30 +526,6 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
     {
         ::addInstruction(genBlock, op, len, flags);
     };
-
-    // common patterns
-    auto loadWithOffset = [&](int size, GenReg base, int offset, GenReg dst, int cycles, int len = 0, int flags = 0)
-    {
-        if(offset)
-        {
-            addInstruction(loadImm(offset));
-            addInstruction(alu(GenOpcode::Add, base, GenReg::Temp, GenReg::Temp));
-        }
-
-        addInstruction(load(size, offset ? GenReg::Temp : base, dst, cycles), len, flags);
-    };
-
-    auto storeWithOffset = [&](int size, GenReg base, int offset, GenReg dst, int cycles, int len = 0, int flags = 0)
-    {
-        if(offset)
-        {
-            addInstruction(loadImm(offset));
-            addInstruction(alu(GenOpcode::Add, base, GenReg::Temp, GenReg::Temp));
-        }
-
-        addInstruction(store(size, offset ? GenReg::Temp : base, dst, cycles), len, flags);
-    };
-
 
     auto pcPtr = reinterpret_cast<const uint16_t *>(std::as_const(mem).mapAddress(pc));
 
@@ -866,9 +865,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 auto dstReg = reg(opcode & 7);
 
                 if(isLoad)
-                    loadWithOffset(4, baseReg, offset * 4, dstReg, 0, 2);
+                    loadWithOffset(genBlock, 4, baseReg, offset * 4, dstReg, 0, 2);
                 else
-                    storeWithOffset(4, baseReg, offset * 4, dstReg, 0, 2, GenOp_UpdateCycles);
+                    storeWithOffset(genBlock, 4, baseReg, offset * 4, dstReg, 0, 2, GenOp_UpdateCycles);
 
                 break;
             }
@@ -881,9 +880,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 auto dstReg = reg(opcode & 7);
 
                 if(isLoad)
-                    loadWithOffset(1, baseReg, offset, dstReg, 0, 2);
+                    loadWithOffset(genBlock, 1, baseReg, offset, dstReg, 0, 2);
                 else
-                    storeWithOffset(1, baseReg, offset, dstReg, 0, GenOp_UpdateCycles);
+                    storeWithOffset(genBlock, 1, baseReg, offset, dstReg, 0, GenOp_UpdateCycles);
 
                 break;
             }
@@ -896,9 +895,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 auto dstReg = reg(opcode & 7);
 
                 if(isLoad)
-                    loadWithOffset(2, baseReg, offset * 2, dstReg, 0, 2);
+                    loadWithOffset(genBlock, 2, baseReg, offset * 2, dstReg, 0, 2);
                 else
-                    storeWithOffset(2, baseReg, offset * 2, dstReg, 0, GenOp_UpdateCycles);
+                    storeWithOffset(genBlock, 2, baseReg, offset * 2, dstReg, 0, GenOp_UpdateCycles);
 
                 break;
             }
@@ -911,9 +910,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 auto dstReg = reg((opcode >> 8) & 7);
 
                 if(isLoad)
-                    loadWithOffset(4, baseReg, offset * 4, dstReg, 0, 2);
+                    loadWithOffset(genBlock, 4, baseReg, offset * 4, dstReg, 0, 2);
                 else
-                    storeWithOffset(4, baseReg, offset * 4, dstReg, 0, 2, GenOp_UpdateCycles);
+                    storeWithOffset(genBlock, 4, baseReg, offset * 4, dstReg, 0, 2, GenOp_UpdateCycles);
 
                 break;
             }
@@ -1026,7 +1025,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 if(regList & (1 << i))
                                 {
                                     // load
-                                    loadWithOffset(4, baseReg, offset * 4, reg(i), 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_ForceAlign);
+                                    loadWithOffset(genBlock, 4, baseReg, offset * 4, reg(i), 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_ForceAlign);
                                     offset++;
                                 }
                             }
@@ -1034,7 +1033,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             if(pclr)
                             {
                                 // load pc (to temp)
-                                loadWithOffset(4, baseReg, offset * 4, GenReg::Temp2, 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_ForceAlign);
+                                loadWithOffset(genBlock, 4, baseReg, offset * 4, GenReg::Temp2, 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_ForceAlign);
 
                                 // clear thumb bit
                                 addInstruction(loadImm(~1u));
@@ -1077,13 +1076,13 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 {
                                     // store
                                     bool last = !pclr && (regList >> i) == 1;
-                                    storeWithOffset(4, baseReg, offset * 4, reg(i), 0, 0, (offset ? GenOp_Sequential : 0) | (last ? GenOp_UpdateCycles : 0));
+                                    storeWithOffset(genBlock, 4, baseReg, offset * 4, reg(i), 0, 0, (offset ? GenOp_Sequential : 0) | (last ? GenOp_UpdateCycles : 0));
                                     offset++;
                                 }
                             }
 
                             if(pclr) // store LR
-                                storeWithOffset(4, baseReg, offset * 4, GenReg::R14, 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_UpdateCycles);
+                                storeWithOffset(genBlock, 4, baseReg, offset * 4, GenReg::R14, 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_UpdateCycles);
 
                             genBlock.instructions.back().len = 2;
                         }
@@ -1318,18 +1317,6 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
     auto addInstruction = [&genBlock](GenOpInfo op, uint8_t len = 0, uint16_t flags = 0)
     {
         ::addInstruction(genBlock, op, len, flags);
-    };
-
-    // FIXME: dedup
-    auto storeWithOffset = [&](int size, GenReg base, int offset, GenReg dst, int cycles, int len = 0, int flags = 0)
-    {
-        if(offset)
-        {
-            addInstruction(loadImm(offset));
-            addInstruction(alu(GenOpcode::Add, base, GenReg::Temp, GenReg::Temp));
-        }
-
-        addInstruction(store(size, offset ? GenReg::Temp : base, dst, cycles), len, flags);
     };
 
     auto op1 = opcode32 >> 27;
@@ -1995,7 +1982,7 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
             if(op1 & 4) // 12 bit immediate
             {
                 auto offset = (opcode32 & 0xFFF);
-                storeWithOffset(width, baseReg, offset, dstReg, 0, 4);
+                storeWithOffset(genBlock, width, baseReg, offset, dstReg, 0, 4);
             }
             else if(op2 & 0x20) // 8 bit immediate
             {
