@@ -957,6 +957,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         break;
                     }
 
+                    /*
+                    these would need to preserve flags
+
                     case 0x1: // CBZ
                     case 0x3:
                     case 0x9: // CBNZ
@@ -977,7 +980,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
                         maxBranch = std::max(maxBranch, addr);
                         break;
-                    }
+                    }*/
                     
                     case 0x2:
                     {
