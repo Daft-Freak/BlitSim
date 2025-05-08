@@ -262,7 +262,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
         }
     };
 
-    auto setFlags32 = [this, &builder](Reg32 dst, Reg32 carryFlagCopy, uint16_t flags, bool invCarry = false, uint8_t haveResFlags = 0xF0)
+    auto setFlags32 = [this, &builder](RMOperand dst, Reg32 carryFlagCopy, uint16_t flags, bool invCarry = false, uint8_t haveResFlags = 0xF0)
     {
         if(!(flags & GenOp_WriteFlags))
             return;
@@ -672,8 +672,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         }
 
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
-                        assert(!rmDst.isMem() || !(instr.flags & GenOp_WriteFlags));
-                        setFlags32(rmDst.getReg32(), {}, instr.flags, false, 0);
+                        setFlags32(rmDst, {}, instr.flags, false, 0);
                     }
                 }
                 else
@@ -932,8 +931,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.setcc(Condition::B, Reg8::R11B);
 
                         // flags
-                        assert(!writtenFlags || !rmDst.isMem());
-                        setFlags32(rmDst.getReg32(), Reg32::R11D, writtenFlags);
+                        setFlags32(rmDst, Reg32::R11D, writtenFlags);
                     }
                 }
                 else
@@ -964,7 +962,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.setcc(Condition::B, Reg8::R11B);
                         
                         // flags
-                        setFlags32(*dst, Reg32::R11D, instr.flags);
+                        setFlags32(RMOperand(*dst), Reg32::R11D, instr.flags);
                     }
                 }
                 else
@@ -998,8 +996,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.and_(rmDst, std::get<RMOperand>(src).getReg32());
 
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
-                        assert(!(instr.flags & GenOp_WriteFlags) || !rmDst.isMem());
-                        setFlags32(rmDst.getReg32(), {}, instr.flags);
+                        setFlags32(rmDst, {}, instr.flags);
                     }
                 }
                 else
@@ -1044,7 +1041,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.setcc(Condition::AE, Reg8::R10B);
 
                         // flags
-                        setFlags32(Reg32::R11D, Reg32::R10D, writtenFlags, true);
+                        setFlags32(RMOperand(Reg32::R11D), Reg32::R10D, writtenFlags, true);
                     }
                 }
                 else
@@ -1068,7 +1065,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         builder.imul(*dst, *src);
                     
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
-                        setFlags32(*dst, {}, instr.flags, false, 0);
+                        setFlags32(RMOperand(*dst), {}, instr.flags, false, 0);
                     }
                 }
                 else
@@ -1100,8 +1097,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.or_(rmDst, std::get<RMOperand>(src).getReg32());
                     
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
-                        assert(!(instr.flags & GenOp_WriteFlags) || !rmDst.isMem());
-                        setFlags32(rmDst.getReg32(), {}, instr.flags);
+                        setFlags32(rmDst, {}, instr.flags);
                     }
                 }
                 else
@@ -1170,8 +1166,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.setcc(Condition::AE, Reg8::R11B);
 
                         // flags
-                        assert(!(instr.flags & GenOp_WriteFlags) || !rmDst.isMem());
-                        setFlags32(rmDst.getReg32(), Reg32::R11D, instr.flags, true);
+                        setFlags32(rmDst, Reg32::R11D, instr.flags, true);
                     }
                 }
                 else
@@ -1204,7 +1199,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.setcc(Condition::AE, Reg8::R11B);
 
                         // flags
-                        setFlags32(*dst, Reg32::R11D, instr.flags, true);
+                        setFlags32(RMOperand(*dst), Reg32::R11D, instr.flags, true);
                     }
                 }
                 else
@@ -1235,7 +1230,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.xor_(*dst, std::get<RMOperand>(src).getReg32());
 
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
-                        setFlags32(*dst, {}, instr.flags);
+                        setFlags32(RMOperand(*dst), {}, instr.flags);
                         
                     }
                 }
@@ -1258,7 +1253,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
                         assert(!writesFlag(instr.flags, SourceFlagType::Carry));
-                        setFlags32(*dst, {}, instr.flags, false, 0); // doesn't affect flags
+                        setFlags32(RMOperand(*dst), {}, instr.flags, false, 0); // doesn't affect flags
                     }
                 }
                 else
@@ -1306,7 +1301,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                     {
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
                         auto setFlags = flagWriteMask(SourceFlagType::Carry); // only have carry
-                        setFlags32(*dst, {}, instr.flags, false, setFlags);
+                        setFlags32(RMOperand(*dst), {}, instr.flags, false, setFlags);
                     }
                 }
                 else
@@ -1348,7 +1343,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         if(std::holds_alternative<Reg8>(src))
                             setFlags = flagWriteMask(SourceFlagType::Carry); // if the src is a reg, it might be 0 (doesn't affect flags)
     
-                        setFlags32(*dst, {}, instr.flags, false, setFlags);
+                        setFlags32(RMOperand(*dst), {}, instr.flags, false, setFlags);
                     }
                 }
                 else
@@ -1381,7 +1376,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         if(std::holds_alternative<Reg8>(src))
                             setFlags = flagWriteMask(SourceFlagType::Carry); // if the src is a reg, it might be 0 (doesn't affect flags)
     
-                        setFlags32(*dst, {}, instr.flags, false, setFlags);
+                        setFlags32(RMOperand(*dst), {}, instr.flags, false, setFlags);
                     }
                 }
                 else
@@ -1414,7 +1409,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         if(std::holds_alternative<Reg8>(src))
                             setFlags = flagWriteMask(SourceFlagType::Carry); // if the src is a reg, it might be 0 (doesn't affect flags)
     
-                        setFlags32(*dst, {}, instr.flags, false, setFlags);
+                        setFlags32(RMOperand(*dst), {}, instr.flags, false, setFlags);
                     }
                 }
                 else
