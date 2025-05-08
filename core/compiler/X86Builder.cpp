@@ -316,22 +316,25 @@ void X86Builder::cmp(Reg8 dst, uint8_t imm)
     write(imm);
 }
 
-// imm -> reg, 8 bit sign extended
-void X86Builder::cmp(Reg32 dst, int8_t imm)
-{
-    auto dstReg = static_cast<int>(dst);
-
-    encodeREX(false, 0, 0, dstReg);
-    write(0x83); // opcode, w = 1, s = 1
-    encodeModRM(dstReg, 7);
-    write(imm);
-}
-
 // imm -> mem, 8 bit
 void X86Builder::cmp(RMOperand dst, uint8_t imm)
 {
     encodeREX(false, 0, dst);
     write(0x80); // opcode, w = 0
+    encodeModRM(dst, 7);
+    write(imm);
+}
+
+// imm -> reg, 8 bit sign extended
+void X86Builder::cmp(Reg32 dst, int8_t imm)
+{
+    cmp(RMOperand(dst), imm);
+}
+
+void X86Builder::cmp(RMOperand dst, int8_t imm)
+{
+    encodeREX(false, 0, dst);
+    write(0x83); // opcode, w = 1, s = 1
     encodeModRM(dst, 7);
     write(imm);
 }
