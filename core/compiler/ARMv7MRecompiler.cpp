@@ -136,6 +136,17 @@ inline GenOpInfo compare(GenReg src0, GenReg src1, int cycles = 0)
     return ret;
 }
 
+inline GenOpInfo not_(GenReg src0, GenReg dst, int cycles = 0)
+{
+    GenOpInfo ret{};
+    ret.opcode = GenOpcode::Not;
+    ret.cycles = cycles;
+    ret.src[0] = static_cast<uint8_t>(src0);
+    ret.dst[0] = static_cast<uint8_t>(dst);
+
+    return ret;
+}
+
 inline GenOpInfo jump(GenCondition cond = GenCondition::Always, GenReg src = GenReg::Temp, int cycles = 0)
 {
     GenOpInfo ret{};
@@ -787,22 +798,13 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             break;
                         case 0xE: // BIC
                         {
-                            GenOpInfo notOp{};
-                            notOp.opcode = GenOpcode::Not;
-                            notOp.src[0] = static_cast<uint8_t>(srcReg);
-                            notOp.dst[0] = static_cast<uint8_t>(GenReg::Temp);
-                            addInstruction(notOp);
-
+                            addInstruction(not_(srcReg, GenReg::Temp));
                             addInstruction(alu(GenOpcode::And, dstReg, GenReg::Temp, dstReg), 2, preserveV | preserveC | writeZ | writeN);
                             break;
                         }
                         case 0xF: // MVN
                         {
-                            GenOpInfo notOp{};
-                            notOp.opcode = GenOpcode::Not;
-                            notOp.src[0] = static_cast<uint8_t>(srcReg);
-                            notOp.dst[0] = static_cast<uint8_t>(dstReg);
-                            addInstruction(notOp, 2, preserveV | preserveC | writeZ | writeN);
+                            addInstruction(not_(srcReg, dstReg), 2, preserveV | preserveC | writeZ | writeN);
                             break;
                         }
 
