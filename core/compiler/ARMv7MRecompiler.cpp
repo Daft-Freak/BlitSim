@@ -1788,8 +1788,25 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
             }
             else if((op1 & 0b111000) != 0b111000) // Bcc
             {
-                printf("unhandled branch op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
-                return true;
+                auto cond = (op1 >> 2) & 0xF;
+
+                auto imm11 = opcode32 & 0x7FF;
+                auto imm6 = (opcode32 >> 16) & 0x3F;
+        
+                auto s = opcode32 & (1 << 26);
+                auto i1 = (opcode32 >> 13) & 1;
+                auto i2 = (opcode32 >> 11) & 1;
+        
+                uint32_t offset = imm11 << 1 | imm6 << 12 | i2 << 18 | i1 << 19;
+        
+                if(s)
+                    offset |= 0xFFF00000; // sign extend
+
+                auto genCond = static_cast<GenCondition>(cond); // they happen to match
+                addInstruction(loadImm(pc + offset));
+                addInstruction(jump(genCond, GenReg::Temp), 4);
+
+                maxBranch = std::max(maxBranch, pc + offset);
             }
             else
             {
