@@ -1751,8 +1751,9 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
             auto op1 = (opcode32 >> 20) & 0x7F;
             auto op2 = (opcode32 >> 12) & 0x7;
 
-            if((op2 & 0b101) == 0b101) // BL
+            if(op2 & 1) // B/BL
             {
+                bool link = op2 & 0b100;
                 auto imm11 = opcode32 & 0x7FF;
                 auto imm10 = (opcode32 >> 16) & 0x3FF;
 
@@ -1771,17 +1772,23 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
                 if(s)
                     offset |= 0xFF000000; // sign extend
 
-                // LR = PC | 1
-                addInstruction(loadImm(pc | 1));
-                addInstruction(move(GenReg::Temp, GenReg::R14));
+                if(link) // BL
+                {
+                    // LR = PC | 1
+                    addInstruction(loadImm(pc | 1));
+                    addInstruction(move(GenReg::Temp, GenReg::R14));
+                }
 
                 // jump
                 addInstruction(loadImm(pc + offset));
-                addInstruction(jump(GenCondition::Always, GenReg::Temp), 4, GenOp_Call);
+                addInstruction(jump(GenCondition::Always, GenReg::Temp), 4, link ? GenOp_Call : 0);
+
+                if(!link && pc > maxBranch)
+                    return true;
             }
-            else if(op2 & 0b101)
+            else if((op1 & 0b111000) != 0b111000) // Bcc
             {
-                printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
+                printf("unhandled branch op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
                 return true;
             }
             else
