@@ -1333,8 +1333,162 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
         }
         else if(opcode32 & (1 << 25)) // data processing (shifted register)
         {
-            printf("unhandled op in convertToGeneric %08X (dp shift)\n", opcode32 & 0xFF000000);
-            return true;
+            auto op = (opcode32 >> 21) & 0xF;
+            bool setFlags = opcode32 & (1 << 20);
+            
+            auto nReg = (opcode32 >> 16) & 0xF;
+            auto mReg = opcode32 & 0xF;
+            auto dstReg = (opcode32 >> 8) & 0xF;
+
+            // get shift
+            auto imm = ((opcode32 >> 10) & 0x1C) | ((opcode32 >> 6) & 0x3);
+            auto type = (opcode32 >> 4) & 3;
+
+            bool shiftCarry = setFlags && op < 8/*not add/sub*/;
+
+            if(type == 3 && !imm) // RRX
+            {
+                printf("unhandled dp (shift reg) op in convertToGeneric %i (rrx)\n", op);
+                return true;
+            }
+
+            auto doShift = [&]()
+            {
+                switch(type)
+                {
+                    case 0: // LSL
+                    {
+                        if(imm == 0) // do nothing
+                            addInstruction(move(reg(mReg), GenReg::Temp));
+                        else
+                        {
+                            addInstruction(loadImm(imm));
+                            addInstruction(alu(GenOpcode::ShiftLeft, reg(mReg), GenReg::Temp, GenReg::Temp), 0, shiftCarry ? (preserveV | writeC) : 0);
+                        }
+                        break;
+                    }
+                    case 1: // LSR
+                    {
+                        addInstruction(loadImm(imm ? imm : 32));
+                        addInstruction(alu(GenOpcode::ShiftRightLogic, reg(mReg), GenReg::Temp, GenReg::Temp), 0, shiftCarry ? (preserveV | writeC) : 0);
+                        break;
+                    }
+                    case 2: // ASR
+                    {
+                        addInstruction(loadImm(imm ? imm : 32));
+                        addInstruction(alu(GenOpcode::ShiftRightArith, reg(mReg), GenReg::Temp, GenReg::Temp), 0, shiftCarry ? (preserveV | writeC) : 0);
+                        break;
+                    }
+                    case 3:
+                    {
+                        if(!imm) // RRX
+                        {
+                            
+                        }
+                        else // ROR
+                        {
+                            addInstruction(loadImm(imm));
+                            addInstruction(alu(GenOpcode::RotateRight, reg(mReg), GenReg::Temp, GenReg::Temp), 0, shiftCarry ? (preserveV | writeC) : 0);
+                        }
+                    }
+                }
+            };
+
+            switch(op)
+            {
+                case 0x0: // AND/TST
+                {
+                    auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is TST
+                    doShift();
+                    addInstruction(alu(GenOpcode::And, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    break;
+                }
+                case 0x1: // BIC
+                {
+                    doShift();
+                    addInstruction(not_(GenReg::Temp, GenReg::Temp));
+                    addInstruction(alu(GenOpcode::And, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    break;
+                }
+                case 0x2: // MOV/ORR
+                {
+                    doShift();
+                    if(nReg == 15) // MOV
+                        addInstruction(move(GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    else // ORR
+                        addInstruction(alu(GenOpcode::Or, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    break;
+                }
+                case 0x3: // MVN/ORN
+                {
+                    doShift();
+
+                    if(nReg == 15) // MVN
+                        addInstruction(not_(GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    else // ORN
+                    {
+                        addInstruction(not_(GenReg::Temp, GenReg::Temp));
+                        addInstruction(alu(GenOpcode::Or, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    }
+                    break;
+                }
+                case 0x4: // EOR/TEQ
+                {
+                    auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is TEQ
+                    doShift();
+                    addInstruction(alu(GenOpcode::Xor, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    break;
+                }
+
+                case 0x8: // ADD/CMN
+                {
+                    doShift();
+                    if(dstReg == 15) // CMN
+                    {
+                        assert(setFlags);
+                        addInstruction(alu(GenOpcode::Add, GenReg::Temp, reg(nReg), GenReg::Temp), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    }
+                    else
+                        addInstruction(alu(GenOpcode::Add, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    break;
+                }
+
+                case 0xA: // ADC
+                {
+                    doShift();
+                    addInstruction(alu(GenOpcode::AddWithCarry, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    break;
+                }
+                case 0xB: // SBC
+                {
+                    doShift();
+                    addInstruction(alu(GenOpcode::SubtractWithCarry, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    break;
+                }
+
+                case 0xD: // SUB/CMP
+                {
+                    doShift();
+
+                    if(dstReg == 15) // CMP
+                        addInstruction(compare(reg(nReg), GenReg::Temp), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    else // SUB
+                        addInstruction(alu(GenOpcode::Subtract, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    break;
+                }
+                case 0xE: // RSB
+                {
+                    assert(dstReg != 15);
+                    auto dst = reg(dstReg);
+                    doShift();
+                    addInstruction(alu(GenOpcode::Subtract, GenReg::Temp, reg(nReg), dst), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    break;
+                }
+
+                default:
+                    printf("unhandled dp (shift reg) op in convertToGeneric %i\n", op);            
+                    return true;
+            }
         }
         else if(opcode32 & (1 << 22)) // load/store dual or exclusive
         {
