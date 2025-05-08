@@ -117,8 +117,6 @@ struct SourceRegInfo
     const char *label;
     uint8_t size; // bits
     SourceRegType type;
-    uint8_t alias; // this reg is part of a larger reg
-    uint32_t aliasMask;
     uint16_t cpuOffset; // for load/store
 };
 

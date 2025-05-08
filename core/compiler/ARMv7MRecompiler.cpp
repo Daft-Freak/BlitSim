@@ -81,43 +81,43 @@ ARMv7MRecompiler::ARMv7MRecompiler(ARMv7MCore &cpu) : cpu(cpu)
 
     uint16_t regsOffset = reinterpret_cast<uintptr_t>(&cpu.regs) - cpuPtrInt;
 
-    sourceInfo.registers.emplace_back(SourceRegInfo{"tmp", 32, SourceRegType::Temp, 0, 0, 0xFFFF});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"tmp", 32, SourceRegType::Temp, 0xFFFF});
 
     // main regs
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R0 ", 32, SourceRegType::General, 0, 0, regsOffset});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R0 ", 32, SourceRegType::General, regsOffset});
     regsOffset += 4;
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R1 ", 32, SourceRegType::General, 0, 0, regsOffset});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R1 ", 32, SourceRegType::General, regsOffset});
     regsOffset += 4;
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R2 ", 32, SourceRegType::General, 0, 0, regsOffset});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R2 ", 32, SourceRegType::General, regsOffset});
     regsOffset += 4;
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R3 ", 32, SourceRegType::General, 0, 0, regsOffset});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R3 ", 32, SourceRegType::General, regsOffset});
     regsOffset += 4;
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R4 ", 32, SourceRegType::General, 0, 0, regsOffset});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R4 ", 32, SourceRegType::General, regsOffset});
     regsOffset += 4;
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R5 ", 32, SourceRegType::General, 0, 0, regsOffset});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R5 ", 32, SourceRegType::General, regsOffset});
     regsOffset += 4;
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R6 ", 32, SourceRegType::General, 0, 0, regsOffset});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R6 ", 32, SourceRegType::General, regsOffset});
     regsOffset += 4;
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R7 ", 32, SourceRegType::General, 0, 0, regsOffset});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R7 ", 32, SourceRegType::General, regsOffset});
     
     // >= R8 may require mapping
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R8 ", 32, SourceRegType::General, 0, 0, 0xFFFF});
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R9 ", 32, SourceRegType::General, 0, 0, 0xFFFF});
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R10", 32, SourceRegType::General, 0, 0, 0xFFFF});
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R11", 32, SourceRegType::General, 0, 0, 0xFFFF});
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R12", 32, SourceRegType::General, 0, 0, 0xFFFF});
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R13", 32, SourceRegType::General, 0, 0, 0xFFFF}); // SP
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R14", 32, SourceRegType::General, 0, 0, 0xFFFF}); // LR
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R8 ", 32, SourceRegType::General, 0xFFFF});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R9 ", 32, SourceRegType::General, 0xFFFF});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R10", 32, SourceRegType::General, 0xFFFF});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R11", 32, SourceRegType::General, 0xFFFF});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R12", 32, SourceRegType::General, 0xFFFF});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R13", 32, SourceRegType::General, 0xFFFF}); // SP
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R14", 32, SourceRegType::General, 0xFFFF}); // LR
     // R15 is PC
 
     regsOffset = reinterpret_cast<uintptr_t>(&cpu.cpsr) - cpuPtrInt;
-    sourceInfo.registers.emplace_back(SourceRegInfo{"PSR", 32, SourceRegType::Flags, 0, 0, regsOffset});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"PSR", 32, SourceRegType::Flags, regsOffset});
 
     // CONTROL/PRIMASK (3 chars is not helping here)
-    sourceInfo.registers.emplace_back(SourceRegInfo{"CTL", 32, SourceRegType::General, 0, 0, 0xFFFF});
-    sourceInfo.registers.emplace_back(SourceRegInfo{"PMK", 32, SourceRegType::General, 0, 0, 0xFFFF});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"CTL", 32, SourceRegType::General, 0xFFFF});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"PMK", 32, SourceRegType::General, 0xFFFF});
 
-    sourceInfo.registers.emplace_back(SourceRegInfo{"tm2", 32, SourceRegType::Temp, 0, 0, 0xFFFF});
+    sourceInfo.registers.emplace_back(SourceRegInfo{"tm2", 32, SourceRegType::Temp, 0xFFFF});
 
     // condition flags
     sourceInfo.flags.emplace_back(SourceFlagInfo{'V', 28, SourceFlagType::Overflow});

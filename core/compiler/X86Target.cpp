@@ -166,16 +166,8 @@ void X86Target::init(SourceInfo sourceInfo, void *cpuPtr)
 
     numSavedRegs = 4; // TODO: can skip RDI/RSI on windows
 
-    // count regs
-    int numRegs = 0;
-    for(auto &reg : sourceInfo.registers)
-    {
-        if(!reg.alias)
-            numRegs++;
-    }
-
     // enable using R15 if needed
-    saveR15 = numRegs > 8;
+    saveR15 = sourceInfo.registers.size() > 8;
 
     // alloc registers
     unsigned int allocOff = 0;
@@ -190,9 +182,6 @@ void X86Target::init(SourceInfo sourceInfo, void *cpuPtr)
             flagsReg = i;
             flagsSize = it->size;
         }
-
-        if(it->alias)
-            continue;
 
         // TODO: make sure we allocate all temps
         if(allocOff == std::size(regList))
@@ -217,8 +206,8 @@ void X86Target::init(SourceInfo sourceInfo, void *cpuPtr)
         flagsMask |= 1 << it->bit;
     }
 
-    // allocate the flags register if it isn't an alias
-    if(!sourceInfo.registers[flagsReg].alias && !regAlloc.count(flagsReg))
+    // allocate the flags register
+    if(!regAlloc.count(flagsReg))
     {
         regAlloc.emplace(flagsReg, Reg32::ESI);
         numSavedRegs++; // need to save it
@@ -561,37 +550,34 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 if(instr.src[1] == instr.dst[0] && canSwapSrcs)
                     return true;
 
-                if(!sourceInfo.registers[instr.dst[0]].aliasMask && !sourceInfo.registers[instr.src[0]].aliasMask)
+                auto dst = checkValue32(instr.dst[0], Value_Memory);
+                if(dst.index() && instr.src[1] == instr.dst[0] && instr.opcode != GenOpcode::Not)
                 {
-                    auto dst = checkValue32(instr.dst[0], Value_Memory);
-                    if(dst.index() && instr.src[1] == instr.dst[0] && instr.opcode != GenOpcode::Not)
+                    // dest is the second source, save it and replace the source
+                    assert(instr.dst[0]); // it's already a temp
+
+                    auto tmp = mapReg32(0);
+
+                    if(instr.src[0] == 0)
                     {
-                        // dest is the second source, save it and replace the source
-                        assert(instr.dst[0]); // it's already a temp
-
-                        auto tmp = mapReg32(0);
-
-                        if(instr.src[0] == 0)
-                        {
-                            printf("unhandled src[0] != dst in op %i\n", int(instr.opcode));
-                            err = true;
-                        }
-                        else
-                        {
-                            // save dest in temp and use as second source
-                            builder.mov(*tmp, std::get<RMOperand>(dst));
-                            instr.src[1] = 0;
-                        }
+                        printf("unhandled src[0] != dst in op %i\n", int(instr.opcode));
+                        err = true;
                     }
-
-                    // move src0 to dst
-                    auto src = checkReg32(instr.src[0], Reg32::R8D);
-
-                    if(src && dst.index())
+                    else
                     {
-                        builder.mov(std::get<RMOperand>(dst), *src);
-                        return false;
+                        // save dest in temp and use as second source
+                        builder.mov(*tmp, std::get<RMOperand>(dst));
+                        instr.src[1] = 0;
                     }
+                }
+
+                // move src0 to dst
+                auto src = checkReg32(instr.src[0], Reg32::R8D);
+
+                if(src && dst.index())
+                {
+                    builder.mov(std::get<RMOperand>(dst), *src);
+                    return false;
                 }
 
                 printf("unhandled src[0] != dst in op %i\n", int(instr.opcode));
@@ -1882,28 +1868,15 @@ uint8_t *X86Target::compileEntry(uint8_t *&codeBuf, unsigned int codeBufSize)
 
 std::optional<Reg8> X86Target::mapReg8(uint8_t index)
 {
-    // remap aliases
-    auto &reg = sourceInfo.registers[index];
-    if(reg.alias)
-        index = reg.alias;
-
     if(auto reg32 = mapReg32(index))
     {
         // default to low
-        if(!reg.alias || reg.aliasMask == 0xFF)
-        {
-            // SPL/BPL/SIL/DIL (require REX)
-            if(*reg32 == Reg32::ESP || *reg32 == Reg32::EBP || *reg32 == Reg32::ESI || *reg32 == Reg32::EDI)
-                return static_cast<Reg8>(static_cast<int>(*reg32) + 0x10);
-    
-            return static_cast<Reg8>(*reg32);
-        }
 
-        // handle high aliases
-        if(reg.aliasMask == 0xFF00 && (*reg32 == Reg32::EAX || *reg32 == Reg32::ECX || *reg32 == Reg32::EDX || *reg32 == Reg32::EBX))
-            return static_cast<Reg8>(static_cast<int>(*reg32) + 4);
+        // SPL/BPL/SIL/DIL (require REX)
+        if(*reg32 == Reg32::ESP || *reg32 == Reg32::EBP || *reg32 == Reg32::ESI || *reg32 == Reg32::EDI)
+            return static_cast<Reg8>(static_cast<int>(*reg32) + 0x10);
 
-        return {};
+        return static_cast<Reg8>(*reg32);
     }
 
     return {};
@@ -1919,9 +1892,6 @@ std::optional<Reg16> X86Target::mapReg16(uint8_t index)
 
 std::optional<Reg32> X86Target::mapReg32(uint8_t index)
 {
-    if(sourceInfo.registers[index].alias)
-        return {};
-
     auto alloc = regAlloc.find(index);
     if(alloc != regAlloc.end())
         return alloc->second;
