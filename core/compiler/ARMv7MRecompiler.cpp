@@ -1777,8 +1777,67 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
         }
         else if(opcode32 & (1 << 25)) // data processing (plain immediate)
         {
-            printf("unhandled op in convertToGeneric %08X (dp imm)\n", opcode32 & 0xFF000000);
-            return true;
+            auto op = (opcode32 >> 21) & 0xF;
+
+            assert(!(opcode32 & (1 << 20))); // S = 0
+
+            auto nReg = (opcode32 >> 16) & 0xF;
+            auto dstReg = (opcode32 >> 8) & 0xF;
+
+            switch(op)
+            {
+                case 0xA: // SBFX
+                case 0xE: // UBFX
+                {
+                    int lsbit = ((opcode32 >> 10) & 0x1C) | ((opcode32 >> 6) & 3);
+                    int width = (opcode32 & 0x1F) + 1;
+
+                    assert(lsbit + width <= 32); // "UNPREDICTABLE"
+        
+                    // shift out high bits
+                    addInstruction(loadImm(32 - (width + lsbit)));
+                    addInstruction(alu(GenOpcode::ShiftLeft, reg(nReg), GenReg::Temp, reg(dstReg)));
+
+                    // shift down and sign extend (if SBFX)
+                    addInstruction(loadImm(32 - width));
+                    addInstruction(alu(op == 0xA ? GenOpcode::ShiftRightArith : GenOpcode::ShiftRightLogic, reg(dstReg), GenReg::Temp, reg(dstReg)), 4);
+
+                    break;
+                }
+
+                case 0xB: // BFI/BFC
+                {
+                    int msb = (opcode32 & 0x1F);
+                    int lsb = ((opcode32 >> 10) & 0x1C) | ((opcode32 >> 6) & 3);
+
+                    assert(msb >= lsb);
+
+                    auto mask = (msb - lsb == 31) ? ~ 0 : (1 << (msb - lsb + 1)) - 1;
+
+                    // d &= ~(mask << lsb)
+                    addInstruction(loadImm(~(mask << lsb)));
+                    addInstruction(alu(GenOpcode::And, reg(dstReg), GenReg::Temp, reg(dstReg)), nReg == 15 ? 4 : 0);
+
+                    if(nReg != 15) // not BFC (BFI)
+                    {
+                        // n & mask
+                        addInstruction(loadImm(mask));
+                        addInstruction(alu(GenOpcode::And, GenReg::Temp, reg(nReg), GenReg::Temp2));
+                        // ... << lsb
+                        addInstruction(loadImm(lsb));
+                        addInstruction(alu(GenOpcode::ShiftLeft, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+
+                        // d |= ...
+                        addInstruction(alu(GenOpcode::Or, reg(dstReg), GenReg::Temp2, reg(dstReg)), 4);
+                    }
+
+                    break;
+                }
+
+                default:
+                    printf("unhandled dp imm op in convertToGeneric %x\n", op);
+                    return true;
+            }
         }
         else
         {
