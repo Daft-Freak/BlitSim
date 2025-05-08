@@ -99,15 +99,20 @@ ARMv7MRecompiler::ARMv7MRecompiler(ARMv7MCore &cpu) : cpu(cpu)
     sourceInfo.registers.emplace_back(SourceRegInfo{"R6 ", 32, SourceRegType::General, regsOffset});
     regsOffset += 4;
     sourceInfo.registers.emplace_back(SourceRegInfo{"R7 ", 32, SourceRegType::General, regsOffset});
-    
-    // >= R8 may require mapping
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R8 ", 32, SourceRegType::General, 0xFFFF});
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R9 ", 32, SourceRegType::General, 0xFFFF});
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R10", 32, SourceRegType::General, 0xFFFF});
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R11", 32, SourceRegType::General, 0xFFFF});
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R12", 32, SourceRegType::General, 0xFFFF});
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R13", 32, SourceRegType::General, 0xFFFF}); // SP
-    sourceInfo.registers.emplace_back(SourceRegInfo{"R14", 32, SourceRegType::General, 0xFFFF}); // LR
+    regsOffset += 4;
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R8 ", 32, SourceRegType::General, regsOffset});
+    regsOffset += 4;
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R9 ", 32, SourceRegType::General, regsOffset});
+    regsOffset += 4;
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R10", 32, SourceRegType::General, regsOffset});
+    regsOffset += 4;
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R11", 32, SourceRegType::General, regsOffset});
+    regsOffset += 4;
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R12", 32, SourceRegType::General, regsOffset});
+    regsOffset += 4;
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R13", 32, SourceRegType::General, 0xFFFF}); // SP (may require mapping)
+    regsOffset += 4;
+    sourceInfo.registers.emplace_back(SourceRegInfo{"R14", 32, SourceRegType::General, regsOffset}); // LR
     // R15 is PC
 
     regsOffset = reinterpret_cast<uintptr_t>(&cpu.cpsr) - cpuPtrInt;
