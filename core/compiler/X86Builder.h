@@ -300,8 +300,10 @@ public:
 
     void xor_(Reg32 dst, Reg32 src);
     void xor_(Reg8 dst, Reg8 src);
+    void xor_(RMOperand dst, Reg32 src);
     void xor_(Reg32 dst, uint32_t imm);
     void xor_(Reg8 dst, uint8_t imm);
+    void xor_(RMOperand dst, uint32_t imm);
 
     uint8_t *getPtr() const {return ptr;}
 

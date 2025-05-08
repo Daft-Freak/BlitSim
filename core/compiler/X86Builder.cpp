@@ -1258,12 +1258,7 @@ void X86Builder::xchg(Reg8 dst, Reg8 src)
 // reg -> reg
 void X86Builder::xor_(Reg32 dst, Reg32 src)
 {
-    auto dstReg = static_cast<int>(dst);
-    auto srcReg = static_cast<int>(src);
-
-    encodeREX(false, srcReg, 0, dstReg);
-    write(0x31); // opcode, w = 1
-    encodeModRM(dstReg, srcReg);
+    xor_(RMOperand(dst), src);
 }
 
 // reg -> reg, 8 bit
@@ -1277,20 +1272,19 @@ void X86Builder::xor_(Reg8 dst, Reg8 src)
     encodeModRMReg8(dstReg, srcReg);
 }
 
+void X86Builder::xor_(RMOperand dst, Reg32 src)
+{
+    auto srcReg = static_cast<int>(src);
+
+    encodeREX(false, srcReg, dst);
+    write(0x31); // opcode, w = 1
+    encodeModRM(dst, srcReg);
+}
+
 // imm -> reg
 void X86Builder::xor_(Reg32 dst, uint32_t imm)
 {
-    auto dstReg = static_cast<int>(dst);
-
-    encodeREX(false, 0, 0, dstReg);
-    write(0x81); // opcode, s = 0, w = 1
-    encodeModRM(dstReg, 6);
-
-    // immediate
-    write(imm);
-    write(imm >> 8);
-    write(imm >> 16);
-    write(imm >> 24);
+    xor_(RMOperand(dst), imm);
 }
 
 // imm -> reg, 8 bit
@@ -1302,6 +1296,19 @@ void X86Builder::xor_(Reg8 dst, uint8_t imm)
     write(0x80); // opcode, s = 0, w = 0
     encodeModRM(dstReg, 6);
     write(imm); // imm
+}
+
+void X86Builder::xor_(RMOperand dst, uint32_t imm)
+{
+    encodeREX(false, 0, dst);
+    write(0x81); // opcode, s = 0, w = 1
+    encodeModRM(dst, 6);
+
+    // immediate
+    write(imm);
+    write(imm >> 8);
+    write(imm >> 16);
+    write(imm >> 24);
 }
 
 void X86Builder::resetPtr(uint8_t *oldPtr)
