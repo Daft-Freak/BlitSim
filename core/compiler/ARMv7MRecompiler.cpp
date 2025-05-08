@@ -47,6 +47,97 @@ enum class GenReg
     Temp2, // used by POP, LDM
 };
 
+// opcode building helpers
+// these would be generic if they didn't use GenReg
+inline GenOpInfo loadImm(uint32_t imm, int cycles = 0)
+{
+    GenOpInfo ret{};
+    ret.opcode = GenOpcode::LoadImm;
+    ret.cycles = cycles;
+    ret.imm = imm;
+
+    return ret;
+}
+
+inline GenOpInfo move(GenReg src, GenReg dst, int cycles = 0)
+{
+    GenOpInfo ret{};
+    ret.opcode = GenOpcode::Move;
+    ret.cycles = cycles;
+    ret.src[0] = static_cast<uint8_t>(src);
+    ret.dst[0] = static_cast<uint8_t>(dst);
+
+    return ret;
+}
+
+inline GenOpInfo load(int size, GenReg addr, GenReg dst, int cycles = 0)
+{
+    GenOpInfo ret{};
+    if(size == 1)
+        ret.opcode = GenOpcode::Load;
+    else if(size == 2)
+        ret.opcode = GenOpcode::Load2;
+    else if(size == 4)
+        ret.opcode = GenOpcode::Load4;
+
+    ret.cycles = cycles;
+    ret.src[0] = static_cast<uint8_t>(addr);
+    ret.dst[0] = static_cast<uint8_t>(dst);
+
+    return ret;
+}
+
+inline GenOpInfo store(int size, GenReg addr, GenReg data, int cycles = 0)
+{
+    GenOpInfo ret{};
+    if(size == 1)
+        ret.opcode = GenOpcode::Store;
+    else if(size == 2)
+        ret.opcode = GenOpcode::Store2;
+    else if(size == 4)
+        ret.opcode = GenOpcode::Store4;
+
+    ret.cycles = cycles;
+    ret.src[0] = static_cast<uint8_t>(addr);
+    ret.src[1] = static_cast<uint8_t>(data);
+
+    return ret;
+}
+
+inline GenOpInfo alu(GenOpcode op, GenReg src0, GenReg src1, GenReg dst, int cycles = 0)
+{
+    GenOpInfo ret{};
+    ret.opcode = op;
+    ret.cycles = cycles;
+    ret.src[0] = static_cast<uint8_t>(src0);
+    ret.src[1] = static_cast<uint8_t>(src1);
+    ret.dst[0] = static_cast<uint8_t>(dst);
+
+    return ret;
+}
+
+inline GenOpInfo compare(GenReg src0, GenReg src1, int cycles = 0)
+{
+    GenOpInfo ret{};
+    ret.opcode = GenOpcode::Compare;
+    ret.cycles = cycles;
+    ret.src[0] = static_cast<uint8_t>(src0);
+    ret.src[1] = static_cast<uint8_t>(src1);
+
+    return ret;
+}
+
+inline GenOpInfo jump(GenCondition cond = GenCondition::Always, GenReg src = GenReg::Temp, int cycles = 0)
+{
+    GenOpInfo ret{};
+    ret.opcode = GenOpcode::Jump;
+    ret.cycles = cycles;
+    ret.src[0] = static_cast<uint8_t>(cond);
+    ret.src[1] = static_cast<uint8_t>(src);
+
+    return ret;
+}
+
 uint16_t getRegOffset(void *cpuPtr, uint8_t reg)
 {
     auto cpu = reinterpret_cast<ARMv7MCore *>(cpuPtr);
@@ -409,96 +500,6 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
         op.len = len;
         op.flags = flags;
         genBlock.instructions.emplace_back(std::move(op));
-    };
-
-    // helpers
-    auto loadImm = [](uint32_t imm, int cycles = 0)
-    {
-        GenOpInfo ret{};
-        ret.opcode = GenOpcode::LoadImm;
-        ret.cycles = cycles;
-        ret.imm = imm;
-
-        return ret;
-    };
-
-    auto move = [](GenReg src, GenReg dst, int cycles = 0)
-    {
-        GenOpInfo ret{};
-        ret.opcode = GenOpcode::Move;
-        ret.cycles = cycles;
-        ret.src[0] = static_cast<uint8_t>(src);
-        ret.dst[0] = static_cast<uint8_t>(dst);
-
-        return ret;
-    };
-
-    auto load = [](int size, GenReg addr, GenReg dst, int cycles)
-    {
-        GenOpInfo ret{};
-        if(size == 1)
-            ret.opcode = GenOpcode::Load;
-        else if(size == 2)
-            ret.opcode = GenOpcode::Load2;
-        else if(size == 4)
-            ret.opcode = GenOpcode::Load4;
-
-        ret.cycles = cycles;
-        ret.src[0] = static_cast<uint8_t>(addr);
-        ret.dst[0] = static_cast<uint8_t>(dst);
-
-        return ret;
-    };
-
-    auto store = [](int size, GenReg addr, GenReg data, int cycles)
-    {
-        GenOpInfo ret{};
-        if(size == 1)
-            ret.opcode = GenOpcode::Store;
-        else if(size == 2)
-            ret.opcode = GenOpcode::Store2;
-        else if(size == 4)
-            ret.opcode = GenOpcode::Store4;
-
-        ret.cycles = cycles;
-        ret.src[0] = static_cast<uint8_t>(addr);
-        ret.src[1] = static_cast<uint8_t>(data);
-
-        return ret;
-    };
-
-    auto alu = [](GenOpcode op, GenReg src0, GenReg src1, GenReg dst, int cycles = 0)
-    {
-        GenOpInfo ret{};
-        ret.opcode = op;
-        ret.cycles = cycles;
-        ret.src[0] = static_cast<uint8_t>(src0);
-        ret.src[1] = static_cast<uint8_t>(src1);
-        ret.dst[0] = static_cast<uint8_t>(dst);
-
-        return ret;
-    };
-
-    auto compare = [](GenReg src0, GenReg src1, int cycles)
-    {
-        GenOpInfo ret{};
-        ret.opcode = GenOpcode::Compare;
-        ret.cycles = cycles;
-        ret.src[0] = static_cast<uint8_t>(src0);
-        ret.src[1] = static_cast<uint8_t>(src1);
-
-        return ret;
-    };
-
-    auto jump = [](GenCondition cond = GenCondition::Always, GenReg src = GenReg::Temp, int cycles)
-    {
-        GenOpInfo ret{};
-        ret.opcode = GenOpcode::Jump;
-        ret.cycles = cycles;
-        ret.src[0] = static_cast<uint8_t>(cond);
-        ret.src[1] = static_cast<uint8_t>(src);
-
-        return ret;
     };
 
     // common patterns
