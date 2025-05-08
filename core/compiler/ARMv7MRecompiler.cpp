@@ -47,6 +47,15 @@ enum class GenReg
     Temp2, // used by POP, LDM
 };
 
+// flag bits (need to match cpu)
+constexpr int preserveV = (1u << 28) >> 28;
+constexpr int preserveC = (1u << 29) >> 28;
+
+constexpr int writeV = (1u << 28) >> 24;
+constexpr int writeC = (1u << 29) >> 24;
+constexpr int writeZ = (1u << 30) >> 24;
+constexpr int writeN = (1u << 31) >> 24;
+
 // opcode building helpers
 // these would be generic if they didn't use GenReg
 inline GenOpInfo loadImm(uint32_t imm, int cycles = 0)
@@ -138,6 +147,39 @@ inline GenOpInfo jump(GenCondition cond = GenCondition::Always, GenReg src = Gen
     return ret;
 }
 
+// helper to add instruction to block
+static void addInstruction(GenBlockInfo &genBlock, GenOpInfo op, uint8_t len, uint16_t flags)
+{
+    if(flags & GenOp_Exit)
+        assert(op.opcode == GenOpcode::Jump);
+
+    // move branch target flag up to the start of the original instruction
+    if((flags & GenOp_BranchTarget) && !genBlock.instructions.empty() && !genBlock.instructions.back().len)
+    {
+        flags &= ~GenOp_BranchTarget;
+        auto rit = genBlock.instructions.rbegin();
+        for(;rit != genBlock.instructions.rend(); ++rit)
+        {
+            if(rit->len) // end of previous instr
+            {
+                rit--; // the one after
+                break;
+            }
+        }
+
+        // must be the first instruction
+        if(rit == genBlock.instructions.rend())
+            rit--;
+
+        rit->flags |= GenOp_BranchTarget;
+    }
+
+    op.len = len;
+    op.flags = flags;
+    genBlock.instructions.emplace_back(std::move(op));
+};
+
+// register mapping
 uint16_t getRegOffset(void *cpuPtr, uint8_t reg)
 {
     auto cpu = reinterpret_cast<ARMv7MCore *>(cpuPtr);
@@ -448,7 +490,6 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
     auto &mem = cpu.getMem();
 
-    auto startPC = pc;
     auto maxBranch = pc;
 
     auto reg = [](int reg)
@@ -458,40 +499,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
         return static_cast<GenReg>(reg + 1);
     };
 
-    auto updateEnd = [&startPC, &maxBranch](uint32_t target)
-    {
-        maxBranch = std::max(maxBranch, target);
-    };
-
     auto addInstruction = [&genBlock](GenOpInfo op, uint8_t len = 0, uint16_t flags = 0)
     {
-        if(flags & GenOp_Exit)
-            assert(op.opcode == GenOpcode::Jump);
-
-        // move branch target flag up to the start of the original instruction
-        if((flags & GenOp_BranchTarget) && !genBlock.instructions.empty() && !genBlock.instructions.back().len)
-        {
-            flags &= ~GenOp_BranchTarget;
-            auto rit = genBlock.instructions.rbegin();
-            for(;rit != genBlock.instructions.rend(); ++rit)
-            {
-                if(rit->len) // end of previous instr
-                {
-                    rit--; // the one after
-                    break;
-                }
-            }
-
-            // must be the first instruction
-            if(rit == genBlock.instructions.rend())
-                rit--;
-
-            rit->flags |= GenOp_BranchTarget;
-        }
-
-        op.len = len;
-        op.flags = flags;
-        genBlock.instructions.emplace_back(std::move(op));
+        ::addInstruction(genBlock, op, len, flags);
     };
 
     // common patterns
@@ -517,13 +527,6 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
         addInstruction(store(size, offset ? GenReg::Temp : base, dst, cycles), len, flags);
     };
 
-    const int preserveV = ARMv7MCore::Flag_V >> 28;
-    const int preserveC = ARMv7MCore::Flag_C >> 28;
-
-    const int writeV = ARMv7MCore::Flag_V >> 24;
-    const int writeC = ARMv7MCore::Flag_C >> 24;
-    const int writeZ = ARMv7MCore::Flag_Z >> 24;
-    const int writeN = uint32_t(ARMv7MCore::Flag_N) >> 24;
 
     auto pcPtr = reinterpret_cast<const uint16_t *>(std::as_const(mem).mapAddress(pc));
 
@@ -971,7 +974,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         addInstruction(loadImm(addr));
                         addInstruction(jump(nz ? GenCondition::NotEqual : GenCondition::Equal, GenReg::Temp, 0), 2);
 
-                        updateEnd(addr);
+                        maxBranch = std::max(maxBranch, addr);
                         break;
                     }
                     
@@ -1262,7 +1265,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                     addInstruction(loadImm(addr));
                     addInstruction(jump(genCond, GenReg::Temp), 2);
 
-                    updateEnd(addr);
+                    maxBranch = std::max(maxBranch, addr);
                 }
 
                 break;
