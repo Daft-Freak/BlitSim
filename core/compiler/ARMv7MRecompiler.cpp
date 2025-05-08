@@ -882,7 +882,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 if(isLoad)
                     loadWithOffset(genBlock, 1, baseReg, offset, dstReg, 0, 2);
                 else
-                    storeWithOffset(genBlock, 1, baseReg, offset, dstReg, 0, GenOp_UpdateCycles);
+                    storeWithOffset(genBlock, 1, baseReg, offset, dstReg, 0, 2, GenOp_UpdateCycles);
 
                 break;
             }
@@ -897,7 +897,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 if(isLoad)
                     loadWithOffset(genBlock, 2, baseReg, offset * 2, dstReg, 0, 2);
                 else
-                    storeWithOffset(genBlock, 2, baseReg, offset * 2, dstReg, 0, GenOp_UpdateCycles);
+                    storeWithOffset(genBlock, 2, baseReg, offset * 2, dstReg, 0, 2, GenOp_UpdateCycles);
 
                 break;
             }
@@ -1102,6 +1102,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 {
                                     GenOpInfo op{};
                                     op.opcode = GenOpcode::NOP;
+                                    op.cycles = 1;
 
                                     addInstruction(op, 2);
                                     break;
@@ -1637,6 +1638,7 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
                         {
                             GenOpInfo op{};
                             op.opcode = GenOpcode::NOP;
+                            op.cycles = 1;
 
                             addInstruction(op, 4);
                         }
