@@ -1803,6 +1803,20 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                     addInstruction(alu(GenOpcode::Add, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
                                 break;
                             }
+
+                            case 0xA: // ADC
+                            {
+                                addInstruction(loadImm(val));
+                                addInstruction(alu(GenOpcode::AddWithCarry, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                                break;
+                            }
+                            case 0xB: // SBC
+                            {
+                                addInstruction(loadImm(val));
+                                addInstruction(alu(GenOpcode::SubtractWithCarry, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                                break;
+                            }
+
                             case 0xD: // SUB/CMP
                             {
                                 auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is CMP
