@@ -543,7 +543,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
         };
 
         // helpers to deal with restrictions
-        auto checkSingleSource = [this, &builder, &err, &instr, &checkReg32, &checkValue32](bool canSwapSrcs = false)
+        auto checkSingleSource = [this, &builder, &err, &instr, &checkReg32, &checkValue32, &peekLastImmLoad](bool canSwapSrcs = false)
         {
             if(instr.src[0] != instr.dst[0])
             {
@@ -554,7 +554,8 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 if(dst.index() && instr.src[1] == instr.dst[0] && instr.opcode != GenOpcode::Not)
                 {
                     // dest is the second source, save it and replace the source
-                    assert(instr.dst[0]); // it's already a temp
+                    // can't do this if src1/dst are already temp, unless src1 is an immediate (so the input temp isn't really used)
+                    assert(instr.dst[0] || peekLastImmLoad());
 
                     auto tmp = mapReg32(0);
 
@@ -563,7 +564,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         printf("unhandled src[0] != dst in op %i\n", int(instr.opcode));
                         err = true;
                     }
-                    else
+                    else if(instr.src[1])
                     {
                         // save dest in temp and use as second source
                         builder.mov(*tmp, std::get<RMOperand>(dst));
