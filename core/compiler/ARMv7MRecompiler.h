@@ -29,6 +29,7 @@ protected:
     bool attemptToRun();
 
     void convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBlock);
+    bool convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &genBlock, uint32_t opcode32, uint32_t &maxBranch);
 
     void compileEntry();
 

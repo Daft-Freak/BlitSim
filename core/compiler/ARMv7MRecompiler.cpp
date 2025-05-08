@@ -1293,721 +1293,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 uint32_t opcode32 = opcode << 16 | *pcPtr++;
                 pc += 2;
 
-                auto op1 = opcode32 >> 27;
-
-                if(op1 == 0b11101)
-                {
-                    if(opcode32 & (1 << 26)) // coprocessor
-                    {
-                        printf("unhandled op in convertToGeneric %08X (coproc)\n", opcode32 & 0xFF000000);
-                        done = true;
-                    }
-                    else if(opcode32 & (1 << 25)) // data processing (shifted register)
-                    {
-                        printf("unhandled op in convertToGeneric %08X (dp shift)\n", opcode32 & 0xFF000000);
-                        done = true;
-                    }
-                    else if(opcode32 & (1 << 22)) // load/store dual or exclusive
-                    {
-                        printf("unhandled op in convertToGeneric %08X (l/s d/e)\n", opcode32 & 0xFF000000);
-                        done = true;
-                    }
-                    else // load/store multiple
-                    {
-                        auto op = (opcode32 >> 23) & 3;
-                        bool writeback = opcode32 & (1 << 21);   
-                        bool isLoad = opcode32 & (1 << 20);
-                        auto baseReg = (opcode32 >> 16) & 0xF;
-                        uint16_t regList = opcode32 & 0xFFFF;
-
-                        assert(!(regList & (1 << 13)));
-
-                        if(isLoad)
-                        {
-                            bool baseInList = regList & (1 << baseReg);
-
-                            if(op == 1) // IA
-                            {
-                                addInstruction(move(reg(baseReg), GenReg::Temp2));
-
-                                for(int i = 0; i < 15; i++)
-                                {
-                                    if(!(regList & (1 << i)))
-                                        continue;
-
-                                    addInstruction(load(4, GenReg::Temp2, reg(i), 0));
-                                
-                                    // addr += 4
-                                    addInstruction(loadImm(4));
-                                    addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
-                                }
-
-                                bool writePC = regList >> 15;
-
-                                if(writeback && !baseInList)
-                                {
-                                    if(writePC)
-                                    {
-                                        // do the last +4
-                                        addInstruction(loadImm(4));
-                                        addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, reg(baseReg)));
-                                    }
-                                    else
-                                        addInstruction(move(GenReg::Temp2, reg(baseReg)));
-                                }
-
-                                if(writePC)
-                                {
-                                    // jump
-                                    addInstruction(load(4, GenReg::Temp2, GenReg::Temp2, 0));
-                                    addInstruction(loadImm(~1u));
-                                    addInstruction(alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp2));
-                                    addInstruction(jump(GenCondition::Always, GenReg::Temp2, 0));
-
-                                    if(pc > maxBranch)
-                                        done = true;
-                                }
-
-                                genBlock.instructions.back().len = 4;
-                            }
-                            else if(op == 2) // DB
-                            {
-                                // pre-decrement address
-                                int offset = 0;
-                                for(uint16_t t = regList; t; t >>= 1)
-                                {
-                                    if(t & 1)
-                                        offset += 4;
-                                }
-
-                                addInstruction(loadImm(offset));
-                                addInstruction(alu(GenOpcode::Subtract, reg(baseReg), GenReg::Temp, GenReg::Temp2));
-
-                                // this loop is the same as above...
-                                for(int i = 0; i < 15; i++)
-                                {
-                                    if(!(regList & (1 << i)))
-                                        continue;
-
-                                    addInstruction(load(4, GenReg::Temp2, reg(i), 0));
-                                
-                                    // addr += 4
-                                    addInstruction(loadImm(4));
-                                    addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
-                                }
-
-                                bool writePC = regList >> 15;
-
-                                if(writeback && !baseInList)
-                                {
-                                    addInstruction(loadImm(offset));
-                                    addInstruction(alu(GenOpcode::Subtract, reg(baseReg), GenReg::Temp, reg(baseReg)));
-                                }
-
-                                if(writePC)
-                                {
-                                    // jump
-                                    addInstruction(load(4, GenReg::Temp2, GenReg::Temp2, 0));
-                                    addInstruction(loadImm(~1u));
-                                    addInstruction(alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp2));
-                                    addInstruction(jump(GenCondition::Always, GenReg::Temp2, 0));
-
-                                    if(pc > maxBranch)
-                                        done = true;
-                                }
-
-                                genBlock.instructions.back().len = 4;
-                            }
-                            else
-                            {
-                                printf("unhandled op in convertToGeneric %08X (LDM %i)\n", opcode32 & 0xFF000000, op);
-                                done = true;
-                            }
-                        }
-                        else
-                        {
-                            assert(!(regList & (1 << 15)));
-
-                            if(op == 1) // IA
-                            {
-                                addInstruction(move(reg(baseReg), GenReg::Temp2));
-
-                                for(int i = 0; i < 15; i++)
-                                {
-                                    if(!(regList & (1 << i)))
-                                        continue;
-
-                                    addInstruction(store(4, GenReg::Temp2, reg(i), 0));
-                                
-                                    // addr += 4
-                                    addInstruction(loadImm(4));
-                                    addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
-                                }
-
-                                if(writeback)
-                                    addInstruction(move(GenReg::Temp2, reg(baseReg)));
-
-                                genBlock.instructions.back().len = 4;
-                            }
-                            else if(op == 2) // DB
-                            {
-                                // pre-decrement address
-                                int offset = 0;
-                                for(uint16_t t = regList; t; t >>= 1)
-                                {
-                                    if(t & 1)
-                                        offset += 4;
-                                }
-
-                                addInstruction(loadImm(offset));
-                                addInstruction(alu(GenOpcode::Subtract, reg(baseReg), GenReg::Temp, GenReg::Temp2));
-
-                                for(int i = 0; i < 15; i++)
-                                {
-                                    if(!(regList & (1 << i)))
-                                        continue;
-
-                                    addInstruction(store(4, GenReg::Temp2, reg(i), 0));
-                                
-                                    // addr += 4
-                                    addInstruction(loadImm(4));
-                                    addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
-                                }
-
-                                if(writeback)
-                                {
-                                    addInstruction(loadImm(offset));
-                                    addInstruction(alu(GenOpcode::Subtract, reg(baseReg), GenReg::Temp, reg(baseReg)));
-                                }
-
-                                genBlock.instructions.back().len = 4;
-                            }
-                            else
-                            {
-                                printf("unhandled op in convertToGeneric %08X (STM %i)\n", opcode32 & 0xFF000000, op);
-                                done = true;
-                            }
-                        }
-                    }
-                }
-                else if(op1 == 0b11110)
-                {
-                    if(opcode32 & (1 << 15))
-                    {
-                        // branch and misc control
-                        auto op1 = (opcode32 >> 20) & 0x7F;
-                        auto op2 = (opcode32 >> 12) & 0x7;
-
-                        if((op2 & 0b101) == 0b101) // BL
-                        {
-                            auto imm11 = opcode32 & 0x7FF;
-                            auto imm10 = (opcode32 >> 16) & 0x3FF;
-
-                            auto s = opcode32 & (1 << 26);
-                            auto i1 = (opcode32 >> 13) & 1;
-                            auto i2 = (opcode32 >> 11) & 1;
-
-                            if(!s)
-                            {
-                                i1 ^= 1;
-                                i2 ^= 1;
-                            }
-
-                            uint32_t offset = imm11 << 1 | imm10 << 12 | i2 << 22 | i1 << 23;
-
-                            if(s)
-                                offset |= 0xFF000000; // sign extend
-
-                            // LR = PC | 1
-                            addInstruction(loadImm(pc | 1));
-                            addInstruction(move(GenReg::Temp, GenReg::R14));
-
-                            // jump
-                            addInstruction(loadImm(pc + offset));
-                            addInstruction(jump(GenCondition::Always, GenReg::Temp), 4, GenOp_Call);
-                        }
-                        else if(op2 & 0b101)
-                        {
-                            printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
-                            done = true;
-                        }
-                        else
-                        {
-                            switch(op1)
-                            {
-                                case 0x38: // MSR
-                                case 0x39:
-                                {
-                                    auto srcReg = reg((opcode32 >> 16) & 0xF);
-                                    auto sysm = opcode32 & 0xFF;
-        
-                                    if((sysm >> 3) == 0)
-                                    {
-                                        // APSR
-                                        addInstruction(loadImm(~0xF8000000));
-                                        addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
-                                        addInstruction(loadImm(0xF8000000));
-                                        addInstruction(alu(GenOpcode::And, GenReg::Temp, srcReg, GenReg::Temp));
-                                        addInstruction(alu(GenOpcode::Or, GenReg::CPSR, GenReg::Temp, GenReg::CPSR), 4);
-                                    }
-                                    else if((sysm >> 3) == 1)
-                                    {
-                                        // MSP/PSP
-                                        // assuming priviledged
-                                        if(sysm == 8) // MSP
-                                        {
-                                            addInstruction(loadImm(~3));
-                                            addInstruction(alu(GenOpcode::And, GenReg::Temp, srcReg, GenReg::Temp));
-                                            addInstruction(move(GenReg::Temp, GenReg::R13), 4);
-                                        }
-                                        else if(sysm == 9)
-                                        {
-                                            printf("unhandled MSR PSP in convertToGeneric\n");
-                                            done = true;
-                                        }
-                                    }
-                                    else if((sysm >> 3) == 2)
-                                    {
-                                        // PRIMASK/CONTROL
-                                        // assuming priviledged
-        
-                                        if(sysm == 0x10) // PRIMASK
-                                        {
-                                            addInstruction(loadImm(1));
-                                            addInstruction(alu(GenOpcode::And, GenReg::Temp, srcReg, GenReg::Temp));
-                                            addInstruction(move(GenReg::Temp, GenReg::PriMask), 4);
-                                        }
-                                        else
-                                        {
-                                            printf("unhandled MSR CONTROL in convertToGeneric\n");    
-                                            done = true;
-                                        }
-                                    }
-                                    break;
-                                }
-
-                                case 0x3A: // hints
-                                {
-                                    if((opcode32 & 0x7FF) == 0) // NOP
-                                    {
-                                        GenOpInfo op{};
-                                        op.opcode = GenOpcode::NOP;
-                                        op.cycles = 1;
-
-                                        addInstruction(op, 4);
-                                    }
-                                    else
-                                    {
-                                        printf("unhandled hint op in convertToGeneric %08X\n", opcode32 & 0xFFF0FFFF);
-                                        done = true;
-                                    }
-                                    break;
-                                }
-                                case 0x3B: // misc
-                                {
-                                    auto op = (opcode32 >> 4) & 0xF;
-
-                                    if(op == 0x4 || op == 0x5) // DSB/DMB
-                                    {
-                                        GenOpInfo op{};
-                                        op.opcode = GenOpcode::NOP;
-
-                                        addInstruction(op, 4);
-                                    }
-                                    else
-                                        printf("unhandled misc ctrl op in convertToGeneric %X\n", op);
-
-                                    break;
-                                }
-
-                                case 0x3E: // MRS
-                                case 0x3F:
-                                {
-                                    auto dstReg = reg((opcode32 >> 8) & 0xF);
-                                    auto sysm = opcode32 & 0xFF;
-
-                                    if((sysm >> 3) == 0)
-                                    {
-                                        // xPSR
-                                        uint32_t mask = 0;
-                                        if(sysm & 1) // IPSR
-                                            mask |= 0x1FF;
-
-                                        // if(sysm & 2) // T bit reads as 0 so do nothing
-
-                                        if((sysm & 4) == 0) // APSR
-                                            mask |= 0xF8000000;
-
-                                        // psr & mask
-                                        addInstruction(loadImm(mask));
-                                        addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::Temp));
-                                        // separate mov to help the target
-                                        addInstruction(move(GenReg::Temp, dstReg), 4);
-
-                                    }
-                                    else if((sysm >> 3) == 2)
-                                    {
-                                        // PRIMASK/CONTROL
-                                        if(sysm == 0x10)
-                                        {
-                                            // primask & 1
-                                            addInstruction(loadImm(1));
-                                            addInstruction(alu(GenOpcode::And, GenReg::PriMask, GenReg::Temp, GenReg::Temp));
-                                            addInstruction(move(GenReg::Temp, dstReg), 4);
-                                        }
-                                        else if(sysm == 0x14)
-                                        {
-                                            // control & 3
-                                            addInstruction(loadImm(3));
-                                            addInstruction(alu(GenOpcode::And, GenReg::Control, GenReg::Temp, GenReg::Temp));
-                                            addInstruction(move(GenReg::Temp, dstReg), 4);
-                                        }
-                                    }
-                                    else
-                                    {
-                                        printf("unhandled MRS in convertToGeneric %02X\n", sysm);
-                                        done = true;
-                                    }
-                                    break;
-                                }
-
-                                default:
-                                    printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
-                                    done = true;
-                            }
-                        }
-                    }
-                    else if(opcode32 & (1 << 25)) // data processing (plain immediate)
-                    {
-                        printf("unhandled op in convertToGeneric %08X (dp imm)\n", opcode32 & 0xFF000000);
-                        done = true;
-                    }
-                    else
-                    {
-                        auto op = (opcode32 >> 21) & 0xF;
-                        bool setFlags = opcode32 & (1 << 20);
-
-                        auto nReg = (opcode32 >> 16) & 0xF;
-                        auto dstReg = (opcode32 >> 8) & 0xF;
-
-                        auto imm = ((opcode32 >> 12) & 7) | ((opcode32 >> 23) & 8);
-                        auto val8 = opcode32 & 0xFF;
-
-                        // get the modified imm
-                        uint32_t val;
-
-                        switch(imm)
-                        {
-                            case 0:
-                                val = val8;
-                                break;
-                            case 1:
-                                val = val8 | val8 << 16;
-                                break;
-                            case 2:
-                                val = val8 << 8 | val8 << 24;
-                                break;
-                            case 3:
-                                val = val8 | val8 << 8 | val8 << 16 | val8 << 24;
-                                break;
-                            default:
-                            {
-                                //ROR
-                                int rot = imm << 1 | val8 >> 7;
-                                val = (val8 & 0x7F) | 0x80;
-
-                                val = (val >> rot) | (val << (32 - rot));
-                                bool carry = val & (1 << 31);
-
-                                if(setFlags && op < 8/*not add/sub*/)
-                                {
-                                    // update carry from shift if not something that sets it
-                                    if(carry)
-                                    {
-                                        addInstruction(loadImm(ARMv7MCore::Flag_C));
-                                        addInstruction(alu(GenOpcode::Or, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
-                                    }
-                                    else
-                                    {
-                                        addInstruction(loadImm(~ARMv7MCore::Flag_C));
-                                        addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
-                                    }
-                                }
-
-                                break;
-                            }
-                        }
-
-                        switch(op)
-                        {
-                            case 0x0: // AND/TST
-                            {
-                                auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is TST
-                                addInstruction(loadImm(val));
-                                addInstruction(alu(GenOpcode::And, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
-                                break;
-                            }
-                            case 0x1: // BIC
-                            {
-                                addInstruction(loadImm(~val));
-                                addInstruction(alu(GenOpcode::And, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
-                                break;
-                            }
-                            case 0x2: // MOV/ORR
-                            {
-                                addInstruction(loadImm(val));
-                                if(nReg == 15) // MOV
-                                    addInstruction(move(GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
-                                else // ORR
-                                    addInstruction(alu(GenOpcode::Or, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
-                                break;
-                            }
-                            case 0x3: // MVN/ORN
-                            {
-                                addInstruction(loadImm(~val));
-                                if(nReg == 15) // MVN
-                                    addInstruction(move(GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
-                                else // ORN
-                                    addInstruction(alu(GenOpcode::Or, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
-                                break;
-                            }
-                            case 0x4: // EOR/TEQ
-                            {
-                                auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is TEQ
-                                addInstruction(loadImm(val));
-                                addInstruction(alu(GenOpcode::Xor, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
-                                break;
-                            }
-
-                            case 0x8: // ADD/CMN
-                            {
-                                addInstruction(loadImm(val));
-                                if(dstReg == 15) // CMN
-                                {
-                                    assert(setFlags);
-                                    addInstruction(alu(GenOpcode::Add, GenReg::Temp, reg(nReg), GenReg::Temp), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
-                                }
-                                else
-                                    addInstruction(alu(GenOpcode::Add, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
-                                break;
-                            }
-
-                            case 0xA: // ADC
-                            {
-                                addInstruction(loadImm(val));
-                                addInstruction(alu(GenOpcode::AddWithCarry, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
-                                break;
-                            }
-                            case 0xB: // SBC
-                            {
-                                addInstruction(loadImm(val));
-                                addInstruction(alu(GenOpcode::SubtractWithCarry, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
-                                break;
-                            }
-
-                            case 0xD: // SUB/CMP
-                            {
-                                auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is CMP
-                                addInstruction(loadImm(val));
-                                addInstruction(alu(GenOpcode::Subtract, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
-                                break;
-                            }
-                            case 0xE: // RSB
-                            {
-                                assert(dstReg != 15);
-                                auto dst = reg(dstReg);
-                                addInstruction(loadImm(val));
-                                addInstruction(alu(GenOpcode::Subtract, GenReg::Temp, reg(nReg), dst), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
-                                break;
-                            }
-                            default:
-                                printf("unhandled dp (mod imm) op in convertToGeneric %i\n", op);
-                                done = true;
-                        }
-                    }
-                }
-                else if(op1 == 0b11111)
-                {
-                    if(opcode32 & (1 << 26)) // coprocessor
-                    {
-                        printf("unhandled op in convertToGeneric %08X (coproc)\n", opcode32 & 0xFF000000);
-                        done = true;
-                    }
-                    else if((opcode32 & 0x3800000) == 0x3800000) // long multiply (accumulate), divide
-                    {
-                        printf("unhandled op in convertToGeneric %08X (lmuldiv)\n", opcode32 & 0xFF000000);
-                        done = true;
-                    }
-                    else if((opcode32 & 0x3800000) == 0x3000000) // multiply (accumulate), diff
-                    {
-                        printf("unhandled op in convertToGeneric %08X (muldiff)\n", opcode32 & 0xFF000000);
-                        done = true;
-                    }
-                    else if(opcode32 & (1 << 25)) // data processing (register)
-                    {
-                        printf("unhandled op in convertToGeneric %08X (dp reg)\n", opcode32 & 0xFF000000);
-                        done = true;
-                    }
-                    else if((opcode32 & 0x700000) == 0x500000) // load word
-                    {
-                        auto op1 = (opcode32 >> 23) & 3;
-                        auto op2 = (opcode32 >> 6) & 0x3F;
-
-                        auto baseReg = (opcode32 >> 16) & 0xF;
-                        auto dstReg = (opcode32 >> 12) & 0xF;
-
-                        if(baseReg == 15) // LDR (literal)
-                        {
-                            printf("unhandled op in convertToGeneric %08X (load lit)\n", opcode32 & 0xFF000000);
-                            done = true;
-                        }
-                        else if(op1 == 0 && op2 == 0) // LDR (register)
-                        {
-                            printf("unhandled op in convertToGeneric %08X (load w reg)\n", opcode32 & 0xFF000000);
-                            done = true;
-                        }
-                        else if(op1 == 0 && (op2 & 0x3C) == 0x38) // LDRT
-                        {
-                            printf("unhandled op in convertToGeneric %08X (ldrt)\n", opcode32 & 0xFF000000);
-                            done = true;
-                        }
-                        else // LDR (immediate)
-                        {
-                            bool isPC = dstReg == 15;
-                            auto dst = isPC ? GenReg::Temp2 : reg(dstReg);
-
-                            if(op1 == 1) // +12 bit imm
-                            {
-                                auto offset = (opcode32 & 0xFFF);
-
-                                if(offset)
-                                {
-                                    addInstruction(loadImm(offset));
-                                    addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, GenReg::Temp));
-                                }
-
-                                addInstruction(load(4, offset ? GenReg::Temp : reg(baseReg), dst, 0), isPC ? 0 : 4);
-                            }
-                            else
-                            {
-                                auto offset = (opcode32 & 0xFF);
-
-                                bool writeback = opcode32 & (1 << 8);
-                                bool add = opcode32 & (1 << 9);
-                                bool index = opcode32 & (1 << 10);
-
-                                if(index)
-                                {
-                                    addInstruction(loadImm(add ? offset : -offset));
-                                    addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, GenReg::Temp));
-                                }
-
-                                addInstruction(load(4, index ? GenReg::Temp : reg(baseReg), dst, 0), (writeback || isPC) ? 0 : 4);
-
-                                // write back adjusted base
-                                if(writeback)
-                                {
-                                    // need to redo add even if index is true (can't reuse the temp)
-                                    addInstruction(loadImm(add ? offset : -offset));
-                                    addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, reg(baseReg)), isPC ? 0 : 4);
-                                }
-                            }
-
-                            if(isPC)
-                            {
-                                // clear thumb bit and jump
-                                addInstruction(loadImm(~1u));
-                                addInstruction(alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp));
-                                addInstruction(jump(GenCondition::Always, GenReg::Temp, 0), 4);
-
-                                if(pc > maxBranch)
-                                    done = true;
-                            }
-                        }
-                    }
-                    else if((opcode32 & 0x700000) == 0x300000) // load halfword, memory hints
-                    {
-                        printf("unhandled op in convertToGeneric %08X (load h/hint)\n", opcode32 & 0xFF000000);
-                        done = true;
-                    }
-                    else if((opcode32 & 0x700000) == 0x100000) // load byte, memory hints
-                    {
-                        printf("unhandled op in convertToGeneric %08X (load b/hint)\n", opcode32 & 0xFF000000);
-                        done = true;
-                    }
-                    else // store single data item
-                    {
-                        auto op1 = (opcode32 >> 21) & 7;
-                        auto op2 = (opcode32 >> 6) & 0x3F;
-
-                        auto baseReg = reg((opcode32 >> 16) & 0xF);
-                        int dst = (opcode32 >> 12) & 0xF;
-
-                        if(dst == 15)
-                        {
-                            printf("unhandled str pc in convertToGeneric %08X\n", opcode32 & 0xFFF00000);
-                            done = true;
-                            break;
-                        }
-
-                        auto dstReg = reg(dst);
-
-                        int width = 1 << (op1 & 3);
-
-                        if(op1 & 4) // 12 bit immediate
-                        {
-                            auto offset = (opcode32 & 0xFFF);
-                            storeWithOffset(width, baseReg, offset, dstReg, 0, 4);
-                        }
-                        else if(op2 & 0x20) // 8 bit immediate
-                        {
-                            auto offset = (opcode32 & 0xFF);
-
-                            bool writeback = opcode32 & (1 << 8);
-                            bool add = opcode32 & (1 << 9);
-                            bool index = opcode32 & (1 << 10);
-
-                            if(index)
-                            {
-                                addInstruction(loadImm(add ? offset : -offset));
-                                addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, GenReg::Temp));
-                            }
-
-                            addInstruction(store(width, index ? GenReg::Temp : baseReg, dstReg, 0), writeback ? 0 : 4);
-
-                            // write back adjusted base
-                            if(writeback)
-                            {
-                                if(!index) // adjust now if not done yet
-                                {
-                                    addInstruction(loadImm(add ? offset : -offset));
-                                    addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, baseReg), 4);
-                                }
-                                else
-                                    addInstruction(move(GenReg::Temp, baseReg), 4); // can probably avoid this
-                            }
-                        }
-                        else // register
-                        {
-                            auto offReg = reg(opcode32 & 0xF);
-                            auto shift = (opcode32 >> 4) & 3;
-
-                            // base + off << shift
-                            addInstruction(loadImm(shift));
-                            addInstruction(alu(GenOpcode::ShiftLeft, offReg, GenReg::Temp, GenReg::Temp2));
-                            addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp2, GenReg::Temp));
-
-                            // do the store
-                            addInstruction(store(width, GenReg::Temp, dstReg, 0), 4);
-                        }
-                    }
-                }
-                else
-                {
-                    printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF8000000);
-                    done = true;
-                }
-
+                done = convertTHUMB32BitToGeneric(pc, genBlock, opcode32, maxBranch);
                 break;
             }
 
@@ -2018,6 +1304,749 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
             }
         }
     }
+}
+
+bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &genBlock, uint32_t opcode32, uint32_t &maxBranch)
+{
+    auto reg = [](int reg)
+    {
+        assert(reg < 15);
+
+        return static_cast<GenReg>(reg + 1);
+    };
+
+    auto addInstruction = [&genBlock](GenOpInfo op, uint8_t len = 0, uint16_t flags = 0)
+    {
+        ::addInstruction(genBlock, op, len, flags);
+    };
+
+    // FIXME: dedup
+    auto storeWithOffset = [&](int size, GenReg base, int offset, GenReg dst, int cycles, int len = 0, int flags = 0)
+    {
+        if(offset)
+        {
+            addInstruction(loadImm(offset));
+            addInstruction(alu(GenOpcode::Add, base, GenReg::Temp, GenReg::Temp));
+        }
+
+        addInstruction(store(size, offset ? GenReg::Temp : base, dst, cycles), len, flags);
+    };
+
+    auto op1 = opcode32 >> 27;
+
+    if(op1 == 0b11101)
+    {
+        if(opcode32 & (1 << 26)) // coprocessor
+        {
+            printf("unhandled op in convertToGeneric %08X (coproc)\n", opcode32 & 0xFF000000);
+            return true;
+        }
+        else if(opcode32 & (1 << 25)) // data processing (shifted register)
+        {
+            printf("unhandled op in convertToGeneric %08X (dp shift)\n", opcode32 & 0xFF000000);
+            return true;
+        }
+        else if(opcode32 & (1 << 22)) // load/store dual or exclusive
+        {
+            printf("unhandled op in convertToGeneric %08X (l/s d/e)\n", opcode32 & 0xFF000000);
+            return true;
+        }
+        else // load/store multiple
+        {
+            auto op = (opcode32 >> 23) & 3;
+            bool writeback = opcode32 & (1 << 21);   
+            bool isLoad = opcode32 & (1 << 20);
+            auto baseReg = (opcode32 >> 16) & 0xF;
+            uint16_t regList = opcode32 & 0xFFFF;
+
+            assert(!(regList & (1 << 13)));
+
+            if(isLoad)
+            {
+                bool baseInList = regList & (1 << baseReg);
+
+                if(op == 1) // IA
+                {
+                    addInstruction(move(reg(baseReg), GenReg::Temp2));
+
+                    for(int i = 0; i < 15; i++)
+                    {
+                        if(!(regList & (1 << i)))
+                            continue;
+
+                        addInstruction(load(4, GenReg::Temp2, reg(i), 0));
+                    
+                        // addr += 4
+                        addInstruction(loadImm(4));
+                        addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                    }
+
+                    bool writePC = regList >> 15;
+
+                    if(writeback && !baseInList)
+                    {
+                        if(writePC)
+                        {
+                            // do the last +4
+                            addInstruction(loadImm(4));
+                            addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, reg(baseReg)));
+                        }
+                        else
+                            addInstruction(move(GenReg::Temp2, reg(baseReg)));
+                    }
+
+                    if(writePC)
+                    {
+                        // jump
+                        addInstruction(load(4, GenReg::Temp2, GenReg::Temp2, 0));
+                        addInstruction(loadImm(~1u));
+                        addInstruction(alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp2));
+                        addInstruction(jump(GenCondition::Always, GenReg::Temp2, 0));
+
+                        if(pc > maxBranch)
+                            return true;
+                    }
+
+                    genBlock.instructions.back().len = 4;
+                }
+                else if(op == 2) // DB
+                {
+                    // pre-decrement address
+                    int offset = 0;
+                    for(uint16_t t = regList; t; t >>= 1)
+                    {
+                        if(t & 1)
+                            offset += 4;
+                    }
+
+                    addInstruction(loadImm(offset));
+                    addInstruction(alu(GenOpcode::Subtract, reg(baseReg), GenReg::Temp, GenReg::Temp2));
+
+                    // this loop is the same as above...
+                    for(int i = 0; i < 15; i++)
+                    {
+                        if(!(regList & (1 << i)))
+                            continue;
+
+                        addInstruction(load(4, GenReg::Temp2, reg(i), 0));
+                    
+                        // addr += 4
+                        addInstruction(loadImm(4));
+                        addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                    }
+
+                    bool writePC = regList >> 15;
+
+                    if(writeback && !baseInList)
+                    {
+                        addInstruction(loadImm(offset));
+                        addInstruction(alu(GenOpcode::Subtract, reg(baseReg), GenReg::Temp, reg(baseReg)));
+                    }
+
+                    if(writePC)
+                    {
+                        // jump
+                        addInstruction(load(4, GenReg::Temp2, GenReg::Temp2, 0));
+                        addInstruction(loadImm(~1u));
+                        addInstruction(alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp2));
+                        addInstruction(jump(GenCondition::Always, GenReg::Temp2, 0));
+
+                        if(pc > maxBranch)
+                            return true;
+                    }
+
+                    genBlock.instructions.back().len = 4;
+                }
+                else
+                {
+                    printf("unhandled op in convertToGeneric %08X (LDM %i)\n", opcode32 & 0xFF000000, op);
+                    return true;
+                }
+            }
+            else
+            {
+                assert(!(regList & (1 << 15)));
+
+                if(op == 1) // IA
+                {
+                    addInstruction(move(reg(baseReg), GenReg::Temp2));
+
+                    for(int i = 0; i < 15; i++)
+                    {
+                        if(!(regList & (1 << i)))
+                            continue;
+
+                        addInstruction(store(4, GenReg::Temp2, reg(i), 0));
+                    
+                        // addr += 4
+                        addInstruction(loadImm(4));
+                        addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                    }
+
+                    if(writeback)
+                        addInstruction(move(GenReg::Temp2, reg(baseReg)));
+
+                    genBlock.instructions.back().len = 4;
+                }
+                else if(op == 2) // DB
+                {
+                    // pre-decrement address
+                    int offset = 0;
+                    for(uint16_t t = regList; t; t >>= 1)
+                    {
+                        if(t & 1)
+                            offset += 4;
+                    }
+
+                    addInstruction(loadImm(offset));
+                    addInstruction(alu(GenOpcode::Subtract, reg(baseReg), GenReg::Temp, GenReg::Temp2));
+
+                    for(int i = 0; i < 15; i++)
+                    {
+                        if(!(regList & (1 << i)))
+                            continue;
+
+                        addInstruction(store(4, GenReg::Temp2, reg(i), 0));
+                    
+                        // addr += 4
+                        addInstruction(loadImm(4));
+                        addInstruction(alu(GenOpcode::Add, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                    }
+
+                    if(writeback)
+                    {
+                        addInstruction(loadImm(offset));
+                        addInstruction(alu(GenOpcode::Subtract, reg(baseReg), GenReg::Temp, reg(baseReg)));
+                    }
+
+                    genBlock.instructions.back().len = 4;
+                }
+                else
+                {
+                    printf("unhandled op in convertToGeneric %08X (STM %i)\n", opcode32 & 0xFF000000, op);
+                    return true;
+                }
+            }
+        }
+    }
+    else if(op1 == 0b11110)
+    {
+        if(opcode32 & (1 << 15))
+        {
+            // branch and misc control
+            auto op1 = (opcode32 >> 20) & 0x7F;
+            auto op2 = (opcode32 >> 12) & 0x7;
+
+            if((op2 & 0b101) == 0b101) // BL
+            {
+                auto imm11 = opcode32 & 0x7FF;
+                auto imm10 = (opcode32 >> 16) & 0x3FF;
+
+                auto s = opcode32 & (1 << 26);
+                auto i1 = (opcode32 >> 13) & 1;
+                auto i2 = (opcode32 >> 11) & 1;
+
+                if(!s)
+                {
+                    i1 ^= 1;
+                    i2 ^= 1;
+                }
+
+                uint32_t offset = imm11 << 1 | imm10 << 12 | i2 << 22 | i1 << 23;
+
+                if(s)
+                    offset |= 0xFF000000; // sign extend
+
+                // LR = PC | 1
+                addInstruction(loadImm(pc | 1));
+                addInstruction(move(GenReg::Temp, GenReg::R14));
+
+                // jump
+                addInstruction(loadImm(pc + offset));
+                addInstruction(jump(GenCondition::Always, GenReg::Temp), 4, GenOp_Call);
+            }
+            else if(op2 & 0b101)
+            {
+                printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
+                return true;
+            }
+            else
+            {
+                switch(op1)
+                {
+                    case 0x38: // MSR
+                    case 0x39:
+                    {
+                        auto srcReg = reg((opcode32 >> 16) & 0xF);
+                        auto sysm = opcode32 & 0xFF;
+
+                        if((sysm >> 3) == 0)
+                        {
+                            // APSR
+                            addInstruction(loadImm(~0xF8000000));
+                            addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
+                            addInstruction(loadImm(0xF8000000));
+                            addInstruction(alu(GenOpcode::And, GenReg::Temp, srcReg, GenReg::Temp));
+                            addInstruction(alu(GenOpcode::Or, GenReg::CPSR, GenReg::Temp, GenReg::CPSR), 4);
+                        }
+                        else if((sysm >> 3) == 1)
+                        {
+                            // MSP/PSP
+                            // assuming priviledged
+                            if(sysm == 8) // MSP
+                            {
+                                addInstruction(loadImm(~3));
+                                addInstruction(alu(GenOpcode::And, GenReg::Temp, srcReg, GenReg::Temp));
+                                addInstruction(move(GenReg::Temp, GenReg::R13), 4);
+                            }
+                            else if(sysm == 9)
+                            {
+                                printf("unhandled MSR PSP in convertToGeneric\n");
+                                return true;
+                            }
+                        }
+                        else if((sysm >> 3) == 2)
+                        {
+                            // PRIMASK/CONTROL
+                            // assuming priviledged
+
+                            if(sysm == 0x10) // PRIMASK
+                            {
+                                addInstruction(loadImm(1));
+                                addInstruction(alu(GenOpcode::And, GenReg::Temp, srcReg, GenReg::Temp));
+                                addInstruction(move(GenReg::Temp, GenReg::PriMask), 4);
+                            }
+                            else
+                            {
+                                printf("unhandled MSR CONTROL in convertToGeneric\n");    
+                                return true;
+                            }
+                        }
+                        break;
+                    }
+
+                    case 0x3A: // hints
+                    {
+                        if((opcode32 & 0x7FF) == 0) // NOP
+                        {
+                            GenOpInfo op{};
+                            op.opcode = GenOpcode::NOP;
+                            op.cycles = 1;
+
+                            addInstruction(op, 4);
+                        }
+                        else
+                        {
+                            printf("unhandled hint op in convertToGeneric %08X\n", opcode32 & 0xFFF0FFFF);
+                            return true;
+                        }
+                        break;
+                    }
+                    case 0x3B: // misc
+                    {
+                        auto op = (opcode32 >> 4) & 0xF;
+
+                        if(op == 0x4 || op == 0x5) // DSB/DMB
+                        {
+                            GenOpInfo op{};
+                            op.opcode = GenOpcode::NOP;
+
+                            addInstruction(op, 4);
+                        }
+                        else
+                            printf("unhandled misc ctrl op in convertToGeneric %X\n", op);
+
+                        break;
+                    }
+
+                    case 0x3E: // MRS
+                    case 0x3F:
+                    {
+                        auto dstReg = reg((opcode32 >> 8) & 0xF);
+                        auto sysm = opcode32 & 0xFF;
+
+                        if((sysm >> 3) == 0)
+                        {
+                            // xPSR
+                            uint32_t mask = 0;
+                            if(sysm & 1) // IPSR
+                                mask |= 0x1FF;
+
+                            // if(sysm & 2) // T bit reads as 0 so do nothing
+
+                            if((sysm & 4) == 0) // APSR
+                                mask |= 0xF8000000;
+
+                            // psr & mask
+                            addInstruction(loadImm(mask));
+                            addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::Temp));
+                            // separate mov to help the target
+                            addInstruction(move(GenReg::Temp, dstReg), 4);
+
+                        }
+                        else if((sysm >> 3) == 2)
+                        {
+                            // PRIMASK/CONTROL
+                            if(sysm == 0x10)
+                            {
+                                // primask & 1
+                                addInstruction(loadImm(1));
+                                addInstruction(alu(GenOpcode::And, GenReg::PriMask, GenReg::Temp, GenReg::Temp));
+                                addInstruction(move(GenReg::Temp, dstReg), 4);
+                            }
+                            else if(sysm == 0x14)
+                            {
+                                // control & 3
+                                addInstruction(loadImm(3));
+                                addInstruction(alu(GenOpcode::And, GenReg::Control, GenReg::Temp, GenReg::Temp));
+                                addInstruction(move(GenReg::Temp, dstReg), 4);
+                            }
+                        }
+                        else
+                        {
+                            printf("unhandled MRS in convertToGeneric %02X\n", sysm);
+                            return true;
+                        }
+                        break;
+                    }
+
+                    default:
+                        printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF7F0F000);
+                        return true;
+                }
+            }
+        }
+        else if(opcode32 & (1 << 25)) // data processing (plain immediate)
+        {
+            printf("unhandled op in convertToGeneric %08X (dp imm)\n", opcode32 & 0xFF000000);
+            return true;
+        }
+        else
+        {
+            auto op = (opcode32 >> 21) & 0xF;
+            bool setFlags = opcode32 & (1 << 20);
+
+            auto nReg = (opcode32 >> 16) & 0xF;
+            auto dstReg = (opcode32 >> 8) & 0xF;
+
+            auto imm = ((opcode32 >> 12) & 7) | ((opcode32 >> 23) & 8);
+            auto val8 = opcode32 & 0xFF;
+
+            // get the modified imm
+            uint32_t val;
+
+            switch(imm)
+            {
+                case 0:
+                    val = val8;
+                    break;
+                case 1:
+                    val = val8 | val8 << 16;
+                    break;
+                case 2:
+                    val = val8 << 8 | val8 << 24;
+                    break;
+                case 3:
+                    val = val8 | val8 << 8 | val8 << 16 | val8 << 24;
+                    break;
+                default:
+                {
+                    //ROR
+                    int rot = imm << 1 | val8 >> 7;
+                    val = (val8 & 0x7F) | 0x80;
+
+                    val = (val >> rot) | (val << (32 - rot));
+                    bool carry = val & (1 << 31);
+
+                    if(setFlags && op < 8/*not add/sub*/)
+                    {
+                        // update carry from shift if not something that sets it
+                        if(carry)
+                        {
+                            addInstruction(loadImm(ARMv7MCore::Flag_C));
+                            addInstruction(alu(GenOpcode::Or, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
+                        }
+                        else
+                        {
+                            addInstruction(loadImm(~ARMv7MCore::Flag_C));
+                            addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
+                        }
+                    }
+
+                    break;
+                }
+            }
+
+            switch(op)
+            {
+                case 0x0: // AND/TST
+                {
+                    auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is TST
+                    addInstruction(loadImm(val));
+                    addInstruction(alu(GenOpcode::And, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    break;
+                }
+                case 0x1: // BIC
+                {
+                    addInstruction(loadImm(~val));
+                    addInstruction(alu(GenOpcode::And, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    break;
+                }
+                case 0x2: // MOV/ORR
+                {
+                    addInstruction(loadImm(val));
+                    if(nReg == 15) // MOV
+                        addInstruction(move(GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    else // ORR
+                        addInstruction(alu(GenOpcode::Or, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    break;
+                }
+                case 0x3: // MVN/ORN
+                {
+                    addInstruction(loadImm(~val));
+                    if(nReg == 15) // MVN
+                        addInstruction(move(GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    else // ORN
+                        addInstruction(alu(GenOpcode::Or, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    break;
+                }
+                case 0x4: // EOR/TEQ
+                {
+                    auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is TEQ
+                    addInstruction(loadImm(val));
+                    addInstruction(alu(GenOpcode::Xor, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                    break;
+                }
+
+                case 0x8: // ADD/CMN
+                {
+                    addInstruction(loadImm(val));
+                    if(dstReg == 15) // CMN
+                    {
+                        assert(setFlags);
+                        addInstruction(alu(GenOpcode::Add, GenReg::Temp, reg(nReg), GenReg::Temp), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    }
+                    else
+                        addInstruction(alu(GenOpcode::Add, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    break;
+                }
+
+                case 0xA: // ADC
+                {
+                    addInstruction(loadImm(val));
+                    addInstruction(alu(GenOpcode::AddWithCarry, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    break;
+                }
+                case 0xB: // SBC
+                {
+                    addInstruction(loadImm(val));
+                    addInstruction(alu(GenOpcode::SubtractWithCarry, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    break;
+                }
+
+                case 0xD: // SUB/CMP
+                {
+                    auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is CMP
+                    addInstruction(loadImm(val));
+                    addInstruction(alu(GenOpcode::Subtract, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    break;
+                }
+                case 0xE: // RSB
+                {
+                    assert(dstReg != 15);
+                    auto dst = reg(dstReg);
+                    addInstruction(loadImm(val));
+                    addInstruction(alu(GenOpcode::Subtract, GenReg::Temp, reg(nReg), dst), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    break;
+                }
+                default:
+                    printf("unhandled dp (mod imm) op in convertToGeneric %i\n", op);
+                    return true;
+            }
+        }
+    }
+    else if(op1 == 0b11111)
+    {
+        if(opcode32 & (1 << 26)) // coprocessor
+        {
+            printf("unhandled op in convertToGeneric %08X (coproc)\n", opcode32 & 0xFF000000);
+            return true;
+        }
+        else if((opcode32 & 0x3800000) == 0x3800000) // long multiply (accumulate), divide
+        {
+            printf("unhandled op in convertToGeneric %08X (lmuldiv)\n", opcode32 & 0xFF000000);
+            return true;
+        }
+        else if((opcode32 & 0x3800000) == 0x3000000) // multiply (accumulate), diff
+        {
+            printf("unhandled op in convertToGeneric %08X (muldiff)\n", opcode32 & 0xFF000000);
+            return true;
+        }
+        else if(opcode32 & (1 << 25)) // data processing (register)
+        {
+            printf("unhandled op in convertToGeneric %08X (dp reg)\n", opcode32 & 0xFF000000);
+            return true;
+        }
+        else if((opcode32 & 0x700000) == 0x500000) // load word
+        {
+            auto op1 = (opcode32 >> 23) & 3;
+            auto op2 = (opcode32 >> 6) & 0x3F;
+
+            auto baseReg = (opcode32 >> 16) & 0xF;
+            auto dstReg = (opcode32 >> 12) & 0xF;
+
+            if(baseReg == 15) // LDR (literal)
+            {
+                printf("unhandled op in convertToGeneric %08X (load lit)\n", opcode32 & 0xFF000000);
+                return true;
+            }
+            else if(op1 == 0 && op2 == 0) // LDR (register)
+            {
+                printf("unhandled op in convertToGeneric %08X (load w reg)\n", opcode32 & 0xFF000000);
+                return true;
+            }
+            else if(op1 == 0 && (op2 & 0x3C) == 0x38) // LDRT
+            {
+                printf("unhandled op in convertToGeneric %08X (ldrt)\n", opcode32 & 0xFF000000);
+                return true;
+            }
+            else // LDR (immediate)
+            {
+                bool isPC = dstReg == 15;
+                auto dst = isPC ? GenReg::Temp2 : reg(dstReg);
+
+                if(op1 == 1) // +12 bit imm
+                {
+                    auto offset = (opcode32 & 0xFFF);
+
+                    if(offset)
+                    {
+                        addInstruction(loadImm(offset));
+                        addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, GenReg::Temp));
+                    }
+
+                    addInstruction(load(4, offset ? GenReg::Temp : reg(baseReg), dst, 0), isPC ? 0 : 4);
+                }
+                else
+                {
+                    auto offset = (opcode32 & 0xFF);
+
+                    bool writeback = opcode32 & (1 << 8);
+                    bool add = opcode32 & (1 << 9);
+                    bool index = opcode32 & (1 << 10);
+
+                    if(index)
+                    {
+                        addInstruction(loadImm(add ? offset : -offset));
+                        addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, GenReg::Temp));
+                    }
+
+                    addInstruction(load(4, index ? GenReg::Temp : reg(baseReg), dst, 0), (writeback || isPC) ? 0 : 4);
+
+                    // write back adjusted base
+                    if(writeback)
+                    {
+                        // need to redo add even if index is true (can't reuse the temp)
+                        addInstruction(loadImm(add ? offset : -offset));
+                        addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, reg(baseReg)), isPC ? 0 : 4);
+                    }
+                }
+
+                if(isPC)
+                {
+                    // clear thumb bit and jump
+                    addInstruction(loadImm(~1u));
+                    addInstruction(alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp));
+                    addInstruction(jump(GenCondition::Always, GenReg::Temp, 0), 4);
+
+                    if(pc > maxBranch)
+                        return true;
+                }
+            }
+        }
+        else if((opcode32 & 0x700000) == 0x300000) // load halfword, memory hints
+        {
+            printf("unhandled op in convertToGeneric %08X (load h/hint)\n", opcode32 & 0xFF000000);
+            return true;
+        }
+        else if((opcode32 & 0x700000) == 0x100000) // load byte, memory hints
+        {
+            printf("unhandled op in convertToGeneric %08X (load b/hint)\n", opcode32 & 0xFF000000);
+            return true;
+        }
+        else // store single data item
+        {
+            auto op1 = (opcode32 >> 21) & 7;
+            auto op2 = (opcode32 >> 6) & 0x3F;
+
+            auto baseReg = reg((opcode32 >> 16) & 0xF);
+            int dst = (opcode32 >> 12) & 0xF;
+
+            if(dst == 15)
+            {
+                printf("unhandled str pc in convertToGeneric %08X\n", opcode32 & 0xFFF00000);
+                return true;
+            }
+
+            auto dstReg = reg(dst);
+
+            int width = 1 << (op1 & 3);
+
+            if(op1 & 4) // 12 bit immediate
+            {
+                auto offset = (opcode32 & 0xFFF);
+                storeWithOffset(width, baseReg, offset, dstReg, 0, 4);
+            }
+            else if(op2 & 0x20) // 8 bit immediate
+            {
+                auto offset = (opcode32 & 0xFF);
+
+                bool writeback = opcode32 & (1 << 8);
+                bool add = opcode32 & (1 << 9);
+                bool index = opcode32 & (1 << 10);
+
+                if(index)
+                {
+                    addInstruction(loadImm(add ? offset : -offset));
+                    addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, GenReg::Temp));
+                }
+
+                addInstruction(store(width, index ? GenReg::Temp : baseReg, dstReg, 0), writeback ? 0 : 4);
+
+                // write back adjusted base
+                if(writeback)
+                {
+                    if(!index) // adjust now if not done yet
+                    {
+                        addInstruction(loadImm(add ? offset : -offset));
+                        addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, baseReg), 4);
+                    }
+                    else
+                        addInstruction(move(GenReg::Temp, baseReg), 4); // can probably avoid this
+                }
+            }
+            else // register
+            {
+                auto offReg = reg(opcode32 & 0xF);
+                auto shift = (opcode32 >> 4) & 3;
+
+                // base + off << shift
+                addInstruction(loadImm(shift));
+                addInstruction(alu(GenOpcode::ShiftLeft, offReg, GenReg::Temp, GenReg::Temp2));
+                addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp2, GenReg::Temp));
+
+                // do the store
+                addInstruction(store(width, GenReg::Temp, dstReg, 0), 4);
+            }
+        }
+    }
+    else
+    {
+        printf("unhandled op in convertToGeneric %08X\n", opcode32 & 0xF8000000);
+        return true;
+    }
+
+    return false;
 }
 
 void ARMv7MRecompiler::compileEntry()
