@@ -1336,8 +1336,78 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
         }
         else if(opcode32 & (1 << 22)) // load/store dual or exclusive
         {
-            printf("unhandled op in convertToGeneric %08X (l/s d/e)\n", opcode32 & 0xFF000000);
-            return true;
+            auto op1 = (opcode32 >> 23) & 3;
+            auto op2 = (opcode32 >> 20) & 3;
+            //auto op3 = (opcode32 >> 4) & 0xF;
+
+            if(op1 == 1 && op2 == 1) // TBB/TBH/LDREXB/LDREXH
+            {
+                printf("unhandled op in convertToGeneric %08X (tb/ldrex)\n", opcode32 & 0xFFF00000);
+                return true;
+            }
+            else if(op1 == 0 && !(op2 & 2)) // LDREX/STREX
+            {
+                printf("unhandled op in convertToGeneric %08X (l/s ex)\n", opcode32 & 0xFFF00000);
+                return true;
+            }
+            else if((op1 & 2) || (op2 & 2)) // LDRD/STRD
+            {
+                bool isLoad = op2 & 1;
+                auto baseReg = reg((opcode32 >> 16) & 0xF);
+                auto dstReg = reg((opcode32 >> 12) & 0xF);
+                auto dstReg2 = reg((opcode32 >> 8) & 0xF);
+
+                int offset = (opcode32 & 0xFF) << 2;
+
+                bool writeback = opcode32 & (1 << 21);
+                bool add = opcode32 & (1 << 23);
+                bool index = opcode32 & (1 << 24);
+
+                if(isLoad)
+                {
+                    // save base if it's the first loaded
+                    bool baseDst = baseReg == dstReg;
+
+                    if(baseDst)
+                        addInstruction(move(baseReg, GenReg::Temp2));
+                    
+                    // first load
+                    if(index)
+                    {
+                        addInstruction(loadImm(add ? offset : -offset));
+                        addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, GenReg::Temp));
+                    }
+                    
+                    addInstruction(load(4, index ? GenReg::Temp : baseReg, dstReg));
+
+                    // second load
+                    if(index)
+                        addInstruction(loadImm((add ? offset : -offset) + 4));
+                    else
+                        addInstruction(loadImm(4));
+
+                    addInstruction(alu(GenOpcode::Add, baseDst ? GenReg::Temp2 :  baseReg, GenReg::Temp, GenReg::Temp));
+                    addInstruction(load(4, GenReg::Temp, dstReg2), writeback ? 0 : 4);
+                    
+                    // write back adjusted base
+                    if(writeback)
+                    {
+                        // need to redo add even if index is true (can't reuse the temp)
+                        addInstruction(loadImm(add ? offset : -offset));
+                        addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, baseReg), 4);
+                    }
+                }
+                else
+                {
+                    printf("unhandled op in convertToGeneric %08X (strd)\n", opcode32 & 0xFFF00000);
+                    return true;
+                }
+            }
+            else
+            {
+                printf("unhandled op in convertToGeneric %08X (l/s d/e)\n", opcode32 & 0xFFF00000);
+                return true;
+            }
         }
         else // load/store multiple
         {
