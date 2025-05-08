@@ -1966,9 +1966,11 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
 
                 case 0xD: // SUB/CMP
                 {
-                    auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is CMP
                     addInstruction(loadImm(val));
-                    addInstruction(alu(GenOpcode::Subtract, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    if(dstReg == 15) // CMP
+                        addInstruction(compare(reg(nReg), GenReg::Temp), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
+                    else
+                        addInstruction(alu(GenOpcode::Subtract, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (writeV | writeC | writeZ | writeN) : 0);
                     break;
                 }
                 case 0xE: // RSB
