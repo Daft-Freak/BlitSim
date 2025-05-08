@@ -1759,6 +1759,12 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 addInstruction(alu(GenOpcode::And, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
                                 break;
                             }
+                            case 0x1: // BIC
+                            {
+                                addInstruction(loadImm(~val));
+                                addInstruction(alu(GenOpcode::And, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                                break;
+                            }
                             case 0x2: // MOV/ORR
                             {
                                 addInstruction(loadImm(val));
@@ -1768,6 +1774,23 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                     addInstruction(alu(GenOpcode::Or, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
                                 break;
                             }
+                            case 0x3: // MVN/ORN
+                            {
+                                addInstruction(loadImm(~val));
+                                if(nReg == 15) // MVN
+                                    addInstruction(move(GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                                else // ORN
+                                    addInstruction(alu(GenOpcode::Or, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                                break;
+                            }
+                            case 0x4: // EOR/TEQ
+                            {
+                                auto dst = dstReg == 15 ? GenReg::Temp : reg(dstReg); // dst == PC is TEQ
+                                addInstruction(loadImm(val));
+                                addInstruction(alu(GenOpcode::Xor, reg(nReg), GenReg::Temp, dst), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                                break;
+                            }
+
                             case 0x8: // ADD/CMN
                             {
                                 addInstruction(loadImm(val));
