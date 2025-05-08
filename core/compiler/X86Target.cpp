@@ -682,13 +682,6 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                     if(addr.index())
                     {
-                        // zero-extend if not 8 bit dest (a temp)
-                        bool zeroExtend = instr.opcode == GenOpcode::Load && sourceInfo.registers[instr.dst[0]].size != 8;
-
-                        // unless we want to sign extend instead
-                        if(instr.flags & GenOp_SignExtend)
-                            zeroExtend = false;
-                        
                         // maybe push
                         callSaveIfNeeded(builder, needCallRestore);
 
@@ -713,42 +706,25 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                         builder.call(func - builder.getPtr()); // do call
 
-                        if(instr.opcode == GenOpcode::Load && dst)
-                        {
-                            auto dst8 = static_cast<Reg8>(*dst);
-                            // 8-bit dest
-                            if(isCallSaved(*dst))
-                            {
-                                callRestore(builder, dst8, zeroExtend, instr.flags & GenOp_SignExtend);
-                                needCallRestore = 0;
-                            }
-                            else if(instr.flags & GenOp_SignExtend)
-                                builder.movsx(static_cast<Reg32>(*dst), Reg8::AL);
-                            else if(zeroExtend)
-                                builder.movzx(static_cast<Reg32>(*dst), Reg8::AL);
-                            else
-                                builder.mov(dst8, Reg8::AL);
-                        }
-                        else
-                        {
-                            // 16/32-bit dest
-                            bool saved = dst && isCallSaved(*dst);
-                            if(saved) // restore everything except RAX
-                                callRestoreIfNeeded(builder, static_cast<Reg32>(callSavedRegs[1]), needCallRestore);
+                        // 16/32-bit dest
+                        bool saved = dst && isCallSaved(*dst);
+                        if(saved) // restore everything except RAX
+                            callRestoreIfNeeded(builder, static_cast<Reg32>(callSavedRegs[1]), needCallRestore);
 
-                            if(instr.opcode == GenOpcode::Load2 && (instr.flags & GenOp_SignExtend))
-                                builder.movsx(*dst, Reg16::AX);
-                            else if(dst)
-                                builder.mov(*dst, Reg32::EAX);
-                            else // "extra"/high reg
-                                storeExtraReg32(instr.dst[0], Reg32::EAX);
+                        if(instr.opcode == GenOpcode::Load && (instr.flags & GenOp_SignExtend))
+                            builder.movsx(*dst, Reg8::AL);
+                        if(instr.opcode == GenOpcode::Load2 && (instr.flags & GenOp_SignExtend))
+                            builder.movsx(*dst, Reg16::AX);
+                        else if(dst)
+                            builder.mov(*dst, Reg32::EAX);
+                        else // "extra"/high reg
+                            storeExtraReg32(instr.dst[0], Reg32::EAX);
 
-                            if(dst && *dst == Reg32::EAX)
-                            {
-                                // discard old RAX
-                                builder.pop(Reg64::R10);
-                                needCallRestore = 0;
-                            }
+                        if(dst && *dst == Reg32::EAX)
+                        {
+                            // discard old RAX
+                            builder.pop(Reg64::R10);
+                            needCallRestore = 0;
                         }
                     }
                 }
@@ -2013,61 +1989,6 @@ void X86Target::callRestore(X86Builder &builder, int &saveState, int toIndex) co
         builder.pop(callSavedRegs[i]);
 
     saveState = toIndex;
-}
-
-void X86Target::callRestore(X86Builder &builder, Reg8 dstReg, bool zeroExtend, bool signExtend) const
-{
-    assert(dstReg != Reg8::DIL); // no
-
-    assert(isCallSaved(dstReg));
-
-    assert(!zeroExtend || !signExtend); // both makes no sense
-
-#ifdef _WIN32
-    builder.add(Reg64::RSP, 32); // shadow space
-#endif
-
-    if(needStackAlign())
-        builder.add(Reg64::RSP, 8); // alignment
-
-    // pop everything except RAX
-    for(unsigned i = numSavedRegs - 1; i > 0; i--)
-        builder.pop(callSavedRegs[i]);
-
-    assert(callSavedRegs[0] == Reg64::RAX);
-
-    // mov ret val (if not going to RAX)
-    if(dstReg != Reg8::AL && dstReg != Reg8::AH)
-    {
-        if(signExtend)
-            builder.movsx(static_cast<Reg32>(dstReg), Reg8::AL);
-        else if(zeroExtend)
-            builder.movzx(static_cast<Reg32>(dstReg), Reg8::AL);
-        else
-            builder.mov(dstReg, Reg8::AL);
-        builder.pop(Reg64::RAX);
-    }
-    else if(dstReg == Reg8::AH) // TODO: having a worse case for A is not great
-    {
-        assert(!zeroExtend && !signExtend);
-        builder.mov(Reg8::AH, Reg8::AL);
-        builder.pop(Reg64::R10);
-        builder.mov(Reg8::AL, Reg8::R10B); // restore low byte
-    }
-    else if(dstReg == Reg8::AL)// ... though this is the worst case... (AL == F, so unlikely)
-    {
-        builder.pop(Reg64::R10);
-        
-        if(signExtend)
-            builder.movsx(Reg32::EAX, Reg8::AL);
-        else if(!zeroExtend)
-        {
-            // EAX = EAX + (R10D & 0xFF00)
-            builder.and_(Reg32::R10D, 0xFF00u);
-            builder.movzx(Reg32::EAX, Reg8::AL);
-            builder.add(Reg32::EAX, Reg32::R10D); // TODO: OR? (haven't added that to builder yet)
-        }
-    }
 }
 
 void X86Target::callRestoreIfNeeded(X86Builder &builder, int &saveState) const
