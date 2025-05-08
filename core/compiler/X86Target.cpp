@@ -952,13 +952,17 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                     if(src && dst)
                     {
-                        // carry in (and clear it)
-                        builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
+                        bool writesC = writesFlag(instr.flags, SourceFlagType::Carry);
+                        // carry in (and clear it if we're writing it)
+                        if(writesC)
+                            builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
+                        else
+                            builder.bt(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
 
                         builder.adc(*dst, *src);
 
                         // copy C flag if we need it
-                        if(writesFlag(instr.flags, SourceFlagType::Carry) && writesFlag(instr.flags, SourceFlagType::Overflow))
+                        if(writesC && writesFlag(instr.flags, SourceFlagType::Overflow))
                             builder.setcc(Condition::B, Reg8::R11B);
                         
                         // flags
@@ -1187,15 +1191,19 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                     if(src && dst)
                     {
-                        // carry in (and clear it)
-                        builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
+                        bool writesC = writesFlag(instr.flags, SourceFlagType::Carry);
+                        // carry in (and clear it if we're writing it)
+                        if(writesC)
+                            builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
+                        else
+                            builder.bt(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
                         builder.cmc(); // inverted
 
                         builder.sbb(*dst, *src);
 
                         // copy _inverted_ C flag if we need it
                         // assuming arm inverted carry flag
-                        if(writesFlag(instr.flags, SourceFlagType::Carry) && writesFlag(instr.flags, SourceFlagType::Overflow))
+                        if(writesC && writesFlag(instr.flags, SourceFlagType::Overflow))
                             builder.setcc(Condition::AE, Reg8::R11B);
 
                         // flags

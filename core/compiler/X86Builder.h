@@ -167,6 +167,7 @@ public:
     void and_(Reg32 dst, int8_t imm);
     void andD(RMOperand dst, int8_t imm);
 
+    void bt(Reg32 base, uint8_t off);
     void btr(Reg32 base, uint8_t off);
 
     void call(int disp);

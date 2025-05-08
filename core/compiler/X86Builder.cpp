@@ -227,6 +227,17 @@ void X86Builder::andD(RMOperand dst, int8_t imm)
     write(imm);
 }
 
+void X86Builder::bt(Reg32 base, uint8_t off)
+{
+    auto baseReg = static_cast<int>(base);
+
+    encodeREX(false, 0, 0, baseReg);
+    write(0x0F); // two byte op
+    write(0xBA); // opcode
+    encodeModRM(baseReg, 4);
+    write(off); // offset
+}
+
 void X86Builder::btr(Reg32 base, uint8_t off)
 {
     auto baseReg = static_cast<int>(base);
