@@ -451,14 +451,6 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
     auto startPC = pc;
     auto maxBranch = pc;
 
-    auto lowReg = [](int reg)
-    {
-        assert(reg < 8);
-
-        return static_cast<GenReg>(reg + 1);
-    };
-
-    // TODO these are basically the same
     auto reg = [](int reg)
     {
         assert(reg < 15);
@@ -549,8 +541,8 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
             case 0x1: // formats 1-2
             {
                 auto instOp = (opcode >> 11) & 0x3;
-                auto srcReg = lowReg((opcode >> 3) & 7);
-                auto dstReg = lowReg(opcode & 7);
+                auto srcReg = reg((opcode >> 3) & 7);
+                auto dstReg = reg(opcode & 7);
 
                 if(instOp == 3) // format 2, add/sub
                 {
@@ -562,7 +554,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                     if(isImm)
                         addInstruction(loadImm((opcode >> 6) & 7));
                     else
-                        src1Reg = lowReg((opcode >> 6) & 7);
+                        src1Reg = reg((opcode >> 6) & 7);
 
                     if(isSub)
                         addInstruction(alu(GenOpcode::Subtract, srcReg, src1Reg, dstReg, pcSCycles), 2, writeV | writeC | writeZ | writeN);
@@ -606,7 +598,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
             case 0x3: // format 3, add/sub immediate
             {
                 auto instOp = (opcode >> 11) & 0x3;
-                auto dstReg = lowReg((opcode >> 8) & 7);
+                auto dstReg = reg((opcode >> 8) & 7);
 
                 addInstruction(loadImm(opcode & 0xFF));
 
@@ -634,7 +626,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 if(opcode & (1 << 11)) // format 6, PC-relative load
                 {
                     // this is almost certainly going to cause more timing problems
-                    auto dstReg = lowReg((opcode >> 8) & 7);
+                    auto dstReg = reg((opcode >> 8) & 7);
                     uint8_t word = opcode & 0xFF;
                     auto addr = ((pc + 2) & ~2) + (word << 2);
 
@@ -749,8 +741,8 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 else // format 4, alu
                 {
                     auto instOp = (opcode >> 6) & 0xF;
-                    auto srcReg = lowReg((opcode >> 3) & 7);
-                    auto dstReg = lowReg(opcode & 7);
+                    auto srcReg = reg((opcode >> 3) & 7);
+                    auto dstReg = reg(opcode & 7);
 
                     switch(instOp)
                     {
@@ -830,9 +822,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
             case 0x5: // formats 7-8
             {
-                auto offReg = lowReg((opcode >> 6) & 7);
-                auto baseReg = lowReg((opcode >> 3) & 7);
-                auto dstReg = lowReg(opcode & 7);
+                auto offReg = reg((opcode >> 6) & 7);
+                auto baseReg = reg((opcode >> 3) & 7);
+                auto dstReg = reg(opcode & 7);
 
                 addInstruction(alu(GenOpcode::Add, baseReg, offReg, GenReg::Temp));
 
@@ -874,8 +866,8 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
             {
                 bool isLoad = opcode & (1 << 11);
                 auto offset = ((opcode >> 6) & 0x1F);
-                auto baseReg = lowReg((opcode >> 3) & 7);
-                auto dstReg = lowReg(opcode & 7);
+                auto baseReg = reg((opcode >> 3) & 7);
+                auto dstReg = reg(opcode & 7);
 
                 if(isLoad)
                     loadWithOffset(4, baseReg, offset * 4, dstReg, pcSCycles + 1, 2);
@@ -889,8 +881,8 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
             {
                 bool isLoad = opcode & (1 << 11);
                 auto offset = ((opcode >> 6) & 0x1F);
-                auto baseReg = lowReg((opcode >> 3) & 7);
-                auto dstReg = lowReg(opcode & 7);
+                auto baseReg = reg((opcode >> 3) & 7);
+                auto dstReg = reg(opcode & 7);
 
                 if(isLoad)
                     loadWithOffset(1, baseReg, offset, dstReg, pcSCycles + 1, 2);
@@ -904,8 +896,8 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
             {
                 bool isLoad = opcode & (1 << 11);
                 auto offset = ((opcode >> 6) & 0x1F);
-                auto baseReg = lowReg((opcode >> 3) & 7);
-                auto dstReg = lowReg(opcode & 7);
+                auto baseReg = reg((opcode >> 3) & 7);
+                auto dstReg = reg(opcode & 7);
 
                 if(isLoad)
                     loadWithOffset(2, baseReg, offset * 2, dstReg, pcSCycles + 1, 2);
@@ -920,7 +912,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 bool isLoad = opcode & (1 << 11);
                 auto offset = opcode & 0xFF;
                 auto baseReg = GenReg::R13;
-                auto dstReg = lowReg((opcode >> 8) & 7);
+                auto dstReg = reg((opcode >> 8) & 7);
 
                 if(isLoad)
                     loadWithOffset(4, baseReg, offset * 4, dstReg, pcSCycles + 1, 2);
@@ -933,7 +925,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
             case 0xA: // format 12, load address
             {
                 bool isSP = opcode & (1 << 11);
-                auto dstReg = lowReg((opcode >> 8) & 7);
+                auto dstReg = reg((opcode >> 8) & 7);
                 auto word = (opcode & 0xFF) << 2;
 
                 if(isSP)
@@ -975,7 +967,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                     {
                         bool nz = opcode & (1 << 11);
                         int offset = (opcode & 0xF8) >> 2 | (opcode & (1 << 9)) >> 3;
-                        auto src = lowReg(opcode & 7);
+                        auto src = reg(opcode & 7);
 
                         // compare with 0
                         addInstruction(loadImm(0));
@@ -992,8 +984,8 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                     
                     case 0x2:
                     {
-                        auto srcReg = lowReg((opcode >> 3) & 7);
-                        auto dstReg = lowReg(opcode & 7);
+                        auto srcReg = reg((opcode >> 3) & 7);
+                        auto dstReg = reg(opcode & 7);
 
                         switch((opcode >> 6) & 3)
                         {
@@ -1039,7 +1031,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 if(regList & (1 << i))
                                 {
                                     // load
-                                    loadWithOffset(4, baseReg, offset * 4, lowReg(i), 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_ForceAlign);
+                                    loadWithOffset(4, baseReg, offset * 4, reg(i), 0, 0, (offset ? GenOp_Sequential : 0) | GenOp_ForceAlign);
                                     offset++;
                                 }
                             }
@@ -1090,7 +1082,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 {
                                     // store
                                     bool last = !pclr && (regList >> i) == 1;
-                                    storeWithOffset(4, baseReg, offset * 4, lowReg(i), 0, 0, (offset ? GenOp_Sequential : 0) | (last ? GenOp_UpdateCycles : 0));
+                                    storeWithOffset(4, baseReg, offset * 4, reg(i), 0, 0, (offset ? GenOp_Sequential : 0) | (last ? GenOp_UpdateCycles : 0));
                                     offset++;
                                 }
                             }
@@ -1148,7 +1140,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
             {
                 bool isLoad = opcode & (1 << 11);
                 int baseRegIndex = (opcode >> 8) & 7;
-                auto baseReg = lowReg(baseRegIndex);
+                auto baseReg = reg(baseRegIndex);
                 uint8_t regList = opcode & 0xFF;
 
                 if(!regList)
@@ -1205,7 +1197,7 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         first = false;
 
                         // move the base to the last loaded reg so it doesn't get overwritten until we're done
-                        auto lastReg = lowReg(lastRegIndex);
+                        auto lastReg = reg(lastRegIndex);
                         if(lastReg != baseReg)
                         {
                             addInstruction(move(baseReg, lastReg));
@@ -1222,7 +1214,6 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
                         bool last = (regList >> i) == 1;
 
-                        auto reg = lowReg(i);
                         if(offset)
                         {
                             if(wroteBack)
@@ -1240,9 +1231,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
                         int flags = (offset ? GenOp_Sequential : 0) | GenOp_ForceAlign;
                         if(isLoad)
-                            addInstruction(load(4, offset ? GenReg::Temp : baseReg, reg, 0), 0, flags);
+                            addInstruction(load(4, offset ? GenReg::Temp : baseReg, reg(i), 0), 0, flags);
                         else
-                            addInstruction(store(4, offset ? GenReg::Temp : baseReg, reg, 0), 0, flags | (last ? GenOp_UpdateCycles : 0));
+                            addInstruction(store(4, offset ? GenReg::Temp : baseReg, reg(i), 0), 0, flags | (last ? GenOp_UpdateCycles : 0));
 
                         // base write-back is on the second cycle of the instruction
                         // which is when the first reg is written
