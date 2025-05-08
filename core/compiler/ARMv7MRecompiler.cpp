@@ -2005,13 +2005,9 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
                 // write back adjusted base
                 if(writeback)
                 {
-                    if(!index) // adjust now if not done yet
-                    {
-                        addInstruction(loadImm(add ? offset : -offset));
-                        addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, baseReg), 4);
-                    }
-                    else
-                        addInstruction(move(GenReg::Temp, baseReg), 4); // can probably avoid this
+                    // need to redo add even if index is true (can't reuse the temp)
+                    addInstruction(loadImm(add ? offset : -offset));
+                    addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, baseReg), 4);
                 }
             }
             else // register
