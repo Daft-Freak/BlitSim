@@ -1582,8 +1582,31 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
                 }
                 else
                 {
-                    printf("unhandled op in convertToGeneric %08X (strd)\n", opcode32 & 0xFFF00000);
-                    return true;
+                    // first store
+                    if(index)
+                    {
+                        addInstruction(loadImm(add ? offset : -offset));
+                        addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, GenReg::Temp));
+                    }
+                    
+                    addInstruction(store(4, index ? GenReg::Temp : baseReg, dstReg));
+
+                    // second store
+                    if(index)
+                        addInstruction(loadImm((add ? offset : -offset) + 4));
+                    else
+                        addInstruction(loadImm(4));
+
+                    addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, GenReg::Temp));
+                    addInstruction(store(4, GenReg::Temp, dstReg2), writeback ? 0 : 4);
+                    
+                    // write back adjusted base
+                    if(writeback)
+                    {
+                        // need to redo add even if index is true (can't reuse the temp)
+                        addInstruction(loadImm(add ? offset : -offset));
+                        addInstruction(alu(GenOpcode::Add, baseReg, GenReg::Temp, baseReg), 4);
+                    }
                 }
             }
             else
