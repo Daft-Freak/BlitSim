@@ -298,6 +298,7 @@ public:
 
     void xchg(Reg32 dst, Reg32 src);
     void xchg(Reg8 dst, Reg8 src);
+    void xchg(RMOperand dst, Reg32 src);
 
     void xor_(Reg32 dst, Reg32 src);
     void xor_(Reg8 dst, Reg8 src);
