@@ -136,6 +136,8 @@ void X86Builder::adc(Reg8 dst, Reg8 src)
 
 void X86Builder::adc(RMOperand dst, Reg32 src)
 {
+    assert(dst.w == 0 || dst.w == 3);
+
     auto srcReg = static_cast<int>(src);
 
     encodeREX(false, srcReg, dst);
@@ -180,6 +182,8 @@ void X86Builder::and_(Reg8 dst, Reg8 src)
 
 void X86Builder::and_(RMOperand dst, Reg32 src)
 {
+    assert(dst.w == 0 || dst.w == 3);
+
     auto srcReg = static_cast<int>(src);
 
     encodeREX(false, srcReg, dst);
@@ -774,6 +778,8 @@ void X86Builder::or_(Reg8 dst, Reg8 src)
 
 void X86Builder::or_(RMOperand dst, Reg32 src)
 {
+    assert(dst.w == 0 || dst.w == 3);
+
     auto srcReg = static_cast<int>(src);
 
     encodeREX(false, srcReg, dst);
@@ -1003,6 +1009,8 @@ void X86Builder::sbb(Reg8 dst, Reg8 src)
 
 void X86Builder::sbb(RMOperand dst, Reg32 src)
 {
+    assert(dst.w == 0 || dst.w == 3);
+
     auto srcReg = static_cast<int>(src);
 
     encodeREX(false, srcReg, dst);
@@ -1271,6 +1279,8 @@ void X86Builder::xchg(Reg8 dst, Reg8 src)
 
 void X86Builder::xchg(RMOperand dst, Reg32 src)
 {
+    assert(dst.w == 0 || dst.w == 3);
+
     auto srcReg = static_cast<int>(src);
 
     encodeREX(false, srcReg, dst);
@@ -1297,6 +1307,8 @@ void X86Builder::xor_(Reg8 dst, Reg8 src)
 
 void X86Builder::xor_(RMOperand dst, Reg32 src)
 {
+    assert(dst.w == 0 || dst.w == 3);
+
     auto srcReg = static_cast<int>(src);
 
     encodeREX(false, srcReg, dst);
