@@ -37,10 +37,12 @@ static bool isXHReg(Reg8 reg)
 }
 
 // more shift helpers
-static bool doRegImmShift32(X86Builder &builder, std::optional<Reg32> dst, std::variant<std::monostate, Reg8, uint8_t> src, std::function<void(X86Builder &, Reg32)> regOp, std::function<void(X86Builder &, Reg32, uint8_t)> immOp, std::function<void(X86Builder &)> preOp, bool rotate = false)
+static bool doRegImmShift32(X86Builder &builder, std::variant<std::monostate, RMOperand, uint32_t> dst, std::variant<std::monostate, Reg8, uint8_t> src, std::function<void(X86Builder &, RMOperand)> regOp, std::function<void(X86Builder &, RMOperand, uint8_t)> immOp, std::function<void(X86Builder &)> preOp, bool rotate = false)
 {
-    if(!src.index() || !dst)
+    if(!src.index() || !dst.index())
         return false;
+
+    auto rmDst = std::get<RMOperand>(dst);
 
     if(std::holds_alternative<uint8_t>(src))
     {
@@ -51,10 +53,10 @@ static bool doRegImmShift32(X86Builder &builder, std::optional<Reg32> dst, std::
         assert(imm <= 32);
         if(imm == 32)
         {
-            immOp(builder, *dst, 31);
+            immOp(builder, rmDst, 31);
             imm = 1;
         }
-        immOp(builder, *dst, imm);
+        immOp(builder, rmDst, imm);
     }
     else
     {
@@ -103,8 +105,8 @@ static bool doRegImmShift32(X86Builder &builder, std::optional<Reg32> dst, std::
             // need to set to 0 and set appropriate flags
             if(preOp)
                 preOp(builder);
-            immOp(builder, *dst, 31);
-            immOp(builder, *dst, 2);
+            immOp(builder, rmDst, 31);
+            immOp(builder, rmDst, 2);
             gtDoneBranch = builder.getPtr();
             builder.jmp(0);
         }
@@ -113,8 +115,8 @@ static bool doRegImmShift32(X86Builder &builder, std::optional<Reg32> dst, std::
         patchCondBranch(eqBranch, Condition::E);
         if(preOp)
             preOp(builder);
-        immOp(builder, *dst, 31);
-        immOp(builder, *dst, 1);
+        immOp(builder, rmDst, 31);
+        immOp(builder, rmDst, 1);
         eqDoneBranch = builder.getPtr();
         builder.jmp(0);
 
@@ -130,13 +132,13 @@ static bool doRegImmShift32(X86Builder &builder, std::optional<Reg32> dst, std::
             preOp(builder);
 
         // if src/dst were the same, they're now both ECX
-        if(srcReg32 == *dst)
-            regOp(builder, Reg32::ECX);
+        if(!rmDst.isMem() && srcReg32 == rmDst.getReg32())
+            regOp(builder, RMOperand(Reg32::ECX));
         // if it was the dst swap the args around
-        else if(dst == Reg32::ECX)
-            regOp(builder, srcReg32);
+        else if(!rmDst.isMem() && rmDst.getReg32() == Reg32::ECX)
+            regOp(builder, RMOperand(srcReg32));
         else
-            regOp(builder, *dst);
+            regOp(builder, rmDst);
 
         if(swap)
             builder.xchg(srcReg32, Reg32::ECX);
@@ -1269,7 +1271,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 if(regSize == 32)
                 {
                     auto src = checkRegOrImm8(instr.src[1]);
-                    auto dst = checkReg32(instr.dst[0]);
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
 
                     auto preOp = [this, &instr](X86Builder &builder)
                     {
@@ -1278,11 +1280,11 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
                     };
 
-                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(Reg32)>(&X86Builder::ror), std::mem_fn<void(Reg32, uint8_t)>(&X86Builder::ror), preOp, true))
+                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(RMOperand)>(&X86Builder::rorD), std::mem_fn<void(RMOperand, uint8_t)>(&X86Builder::rorD), preOp, true))
                     {
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
                         auto setFlags = flagWriteMask(SourceFlagType::Carry); // only have carry
-                        setFlags32(RMOperand(*dst), {}, instr.flags, false, setFlags);
+                        setFlags32(std::get<RMOperand>(dst), {}, instr.flags, false, setFlags);
                     }
                 }
                 else
@@ -1308,7 +1310,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 if(regSize == 32)
                 {
                     auto src = checkRegOrImm8(instr.src[1]);
-                    auto dst = checkReg32(instr.dst[0]);
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
 
                     auto preOp = [this, &instr](X86Builder &builder)
                     {
@@ -1317,14 +1319,14 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
                     };
 
-                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(Reg32)>(&X86Builder::shl), std::mem_fn<void(Reg32, uint8_t)>(&X86Builder::shl), preOp))
+                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(RMOperand)>(&X86Builder::shlD), std::mem_fn<void(RMOperand, uint8_t)>(&X86Builder::shlD), preOp))
                     {
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
                         auto setFlags = 0xF0;
                         if(std::holds_alternative<Reg8>(src))
                             setFlags = flagWriteMask(SourceFlagType::Carry); // if the src is a reg, it might be 0 (doesn't affect flags)
     
-                        setFlags32(RMOperand(*dst), {}, instr.flags, false, setFlags);
+                        setFlags32(std::get<RMOperand>(dst), {}, instr.flags, false, setFlags);
                     }
                 }
                 else
@@ -1341,7 +1343,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 if(regSize == 32)
                 {
                     auto src = checkRegOrImm8(instr.src[1]);
-                    auto dst = checkReg32(instr.dst[0]);
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
 
                     auto preOp = [this, &instr](X86Builder &builder)
                     {
@@ -1350,14 +1352,14 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
                     };
 
-                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(Reg32)>(&X86Builder::sar), std::mem_fn<void(Reg32, uint8_t)>(&X86Builder::sar), preOp))
+                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(RMOperand)>(&X86Builder::sarD), std::mem_fn<void(RMOperand, uint8_t)>(&X86Builder::sarD), preOp))
                     {
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
                         auto setFlags = 0xF0;
                         if(std::holds_alternative<Reg8>(src))
                             setFlags = flagWriteMask(SourceFlagType::Carry); // if the src is a reg, it might be 0 (doesn't affect flags)
     
-                        setFlags32(RMOperand(*dst), {}, instr.flags, false, setFlags);
+                        setFlags32(std::get<RMOperand>(dst), {}, instr.flags, false, setFlags);
                     }
                 }
                 else
@@ -1374,7 +1376,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 if(regSize == 32)
                 {
                     auto src = checkRegOrImm8(instr.src[1]);
-                    auto dst = checkReg32(instr.dst[0]);
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
 
                     auto preOp = [this, &instr](X86Builder &builder)
                     {
@@ -1383,14 +1385,14 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
                     };
 
-                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(Reg32)>(&X86Builder::shr), std::mem_fn<void(Reg32, uint8_t)>(&X86Builder::shr), preOp))
+                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(RMOperand)>(&X86Builder::shrD), std::mem_fn<void(RMOperand, uint8_t)>(&X86Builder::shrD), preOp))
                     {
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
                         auto setFlags = 0xF0;
                         if(std::holds_alternative<Reg8>(src))
                             setFlags = flagWriteMask(SourceFlagType::Carry); // if the src is a reg, it might be 0 (doesn't affect flags)
     
-                        setFlags32(RMOperand(*dst), {}, instr.flags, false, setFlags);
+                        setFlags32(std::get<RMOperand>(dst), {}, instr.flags, false, setFlags);
                     }
                 }
                 else
