@@ -257,13 +257,17 @@ public:
 
     void ror(Reg32 dst);
     void ror(Reg8 dst);
+    void rorD(RMOperand r);
     void ror(Reg32 r, uint8_t count);
     void ror(Reg8 r, uint8_t count);
+    void rorD(RMOperand r, uint8_t count);
 
     void sar(Reg32 dst);
     void sar(Reg8 dst);
+    void sarD(RMOperand r);
     void sar(Reg32 r, uint8_t count);
     void sar(Reg8 r, uint8_t count);
+    void sarD(RMOperand r, uint8_t count);
 
     void sbb(Reg32 dst, Reg32 src);
     void sbb(Reg8 dst, Reg8 src);
@@ -274,13 +278,17 @@ public:
 
     void shr(Reg32 dst);
     void shr(Reg8 dst);
+    void shrD(RMOperand r);
     void shr(Reg32 r, uint8_t count);
     void shr(Reg8 r, uint8_t count);
+    void shrD(RMOperand r, uint8_t count);
 
     void shl(Reg32 dst);
     void shl(Reg8 dst);
+    void shlD(RMOperand r);
     void shl(Reg32 r, uint8_t count);
     void shl(Reg8 r, uint8_t count);
+    void shlD(RMOperand r, uint8_t count);
 
     void stc();
 
