@@ -16,6 +16,9 @@
 // FIXME: this still thinks it's an ARMv4T, or in some places an ARMv6M
 
 ARMv7MCore::ARMv7MCore(MemoryBus &mem) : mem(mem)
+#ifdef RECOMPILER
+                                       , compiler(*this)
+#endif
 {}
 
 void ARMv7MCore::reset()
@@ -114,6 +117,14 @@ void ARMv7MCore::doRunCall(uint32_t addr, uint32_t r0, uint32_t r1)
 
     while(loReg(Reg::PC) != 0x8FFFFFE + 2)
     {
+#ifdef RECOMPILER
+            if(attemptToEnterCompiledCode)
+            {
+                compiler.run();
+                attemptToEnterCompiledCode = false;
+            }
+            else
+#endif
         // CPU
         executeTHUMBInstruction();
 
@@ -1783,11 +1794,13 @@ void ARMv7MCore::doTHUMB32BitCoprocessor(uint32_t opcode, uint32_t pc)
     auto coproc = (opcode >> 8) & 0xF;
     auto op1 = (opcode >> 20) & 0x3F;
 
+#ifndef NDEBUG
     if(coproc != 0xA && coproc != 0xB) // VFP
     {
         printf("Unhandled coprocessor %X (opcode %08X) @%08X\n", coproc, opcode, pc - 6);
         exit(1);
     }
+#endif
 
     bool dWidth = coproc & 1;
 
@@ -3058,6 +3071,7 @@ void ARMv7MCore::doTHUMB32BitDataProcessingReg(uint32_t opcode, uint32_t pc)
 
             switch(op1 & 3)
             {
+                //0: saturating add/sub
                 case 1:
                 {
                     assert(((opcode >> 16) & 0xF) == (opcode & 0xF)); // m encoded twice
@@ -3797,7 +3811,7 @@ void ARMv7MCore::doVFPDataProcessing(uint32_t opcode, uint32_t pc, bool dWidth)
     printf("cdp %x %x %x %x %x\n", t, opc1, opc2, opc3, opc4);
 }
 
-void ARMv7MCore::updateTHUMBPC(uint32_t pc)
+void ARMv7MCore::updateTHUMBPC(uint32_t pc, bool fromCompiler)
 {
     // called when PC is updated in THUMB mode (except for incrementing)
     assert(!(pc & 1));
@@ -3814,7 +3828,7 @@ void ARMv7MCore::updateTHUMBPC(uint32_t pc)
         return;
     }
 
-    if(pc >> 24 == loReg(Reg::PC) >> 24)
+    if(pcPtr && pc >> 24 == loReg(Reg::PC) >> 24)
     {
         // memory region didn't change, skip recaclculating ptr/cycles
         [[maybe_unused]] auto thumbPCPtr = reinterpret_cast<const uint16_t *>(pcPtr + pc);
@@ -3833,4 +3847,14 @@ void ARMv7MCore::updateTHUMBPC(uint32_t pc)
     fetchOp = *thumbPCPtr;
 
     loReg(Reg::PC) = pc + 2; // pointing at last fetch
+
+    if(!fromCompiler)
+        enterCompiledCode();
+}
+
+void ARMv7MCore::enterCompiledCode()
+{
+#ifdef RECOMPILER
+    attemptToEnterCompiledCode = true;
+#endif
 }

@@ -4,6 +4,10 @@
 
 #include "MemoryBus.h"
 
+#ifdef RECOMPILER
+#include "compiler/ARMv7MRecompiler.h"
+#endif
+
 class ARMv7MCore final
 {
 public:
@@ -153,7 +157,9 @@ private:
 
     void doVFPDataProcessing(uint32_t opcode, uint32_t pc, bool dWidth);
 
-    void updateTHUMBPC(uint32_t pc);
+    void updateTHUMBPC(uint32_t pc, bool fromCompiler = false);
+
+    void enterCompiledCode();
 
     static const uint32_t signBit = 0x80000000;
 
@@ -184,4 +190,12 @@ private:
     std::mutex execMutex;
 
     bool paused = false;
+
+#ifdef RECOMPILER
+    bool attemptToEnterCompiledCode = false;
+
+    ARMv7MRecompiler compiler;
+    friend class ARMv7MRecompiler;
+    friend uint16_t getRegOffset(void *cpuPtr, uint8_t reg);
+#endif
 };
