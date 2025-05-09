@@ -155,6 +155,7 @@ public:
 
     void adc(Reg32 dst, Reg32 src);
     void adc(Reg8 dst, Reg8 src);
+    void adc(RMOperand dst, Reg32 src);
     void adc(Reg8 dst, uint8_t imm);
 
     void and_(Reg32 dst, Reg32 src);
@@ -266,6 +267,7 @@ public:
 
     void sbb(Reg32 dst, Reg32 src);
     void sbb(Reg8 dst, Reg8 src);
+    void sbb(RMOperand dst, Reg32 src);
     void sbb(Reg8 dst, uint8_t imm);
 
     void setcc(Condition cc, Reg8 dst);
