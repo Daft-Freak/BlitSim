@@ -2211,8 +2211,93 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
         }
         else if(opcode32 & (1 << 25)) // data processing (register)
         {
-            printf("unhandled op in convertToGeneric %08X (dp reg)\n", opcode32 & 0xFF000000);
-            return true;
+            auto op1 = (opcode32 >> 20) & 0xF;
+            auto op2 = (opcode32 >> 4) & 0xF;
+        
+            auto nReg = (opcode32 >> 16) & 0xF;
+        
+            if((op1 & 0b1000) && !(op2 & 0b1000)) // parallel add/sub
+            {
+                printf("unhandled op in convertToGeneric %08X (dp reg p add/sub)\n", opcode32 & 0xFFF000F0);
+                return true;
+            }
+            else if(op2 == 0)
+            {
+                printf("unhandled op in convertToGeneric %08X (dp reg shift)\n", opcode32 & 0xFFF00000);
+                return true;
+            }
+            else if(op2 & 0b1000)
+            {
+                switch(op1)
+                {
+                    case 0: // SXTAH/SXTH
+                    case 4: // SXTAB/SXTB
+                    {
+                        auto dReg = reg((opcode32 >> 8) & 0xF);
+                        auto mReg = reg(opcode32 & 0xF);
+                        int rotation = (opcode32 >> 1) & 0x18;
+
+                        // rotate
+                        addInstruction(loadImm(rotation));
+                        addInstruction(alu(GenOpcode::RotateRight, mReg, GenReg::Temp, GenReg::Temp));
+
+                        // extend
+                        GenOpInfo extOp{};
+                        extOp.opcode = op1 == 0 ? GenOpcode::SignExtend16 : GenOpcode::SignExtend8;
+                        
+                        if(nReg == 15) // SXTH
+                        {
+                            extOp.dst[0] = static_cast<uint8_t>(dReg);
+                            addInstruction(extOp, 4);
+                        }
+                        else // SXTAH
+                        {
+                            addInstruction(extOp);
+                            // add
+                            addInstruction(alu(GenOpcode::Add, GenReg::Temp, reg(nReg), dReg), 4);
+                        }
+                        break;
+                    }
+                    case 1: // UXTAH/UXTH
+                    case 5: // UXTAB/UXTB
+                    {
+                        auto dReg = reg((opcode32 >> 8) & 0xF);
+                        auto mReg = reg(opcode32 & 0xF);
+                        int rotation = (opcode32 >> 1) & 0x18;
+
+                        // rotate
+                        addInstruction(loadImm(rotation));
+                        addInstruction(alu(GenOpcode::RotateRight, mReg, GenReg::Temp, GenReg::Temp2));
+
+                        // mask
+                        addInstruction(loadImm(op1 == 1 ? 0xFFFF : 0xFF));
+                        auto maskOp = alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp);
+
+                        if(nReg == 15) // UXTH
+                        {
+                            maskOp.dst[0] = static_cast<uint8_t>(dReg);
+                            addInstruction(maskOp, 4);
+                        }
+                        else // UXTAH
+                        {
+                            addInstruction(maskOp);
+                            // add
+                            addInstruction(alu(GenOpcode::Add, GenReg::Temp, reg(nReg), dReg), 4);
+                        }
+                        break;
+                    }
+
+
+                    default:
+                        printf("unhandled dp (reg) op in convertToGeneric %i\n", op1);
+                        return true;
+                }
+            }
+            else
+            {
+                printf("unhandled op in convertToGeneric %08X (dp reg)\n", opcode32 & 0xFFF000F0);
+                return true;
+            }
         }
         else if((opcode32 & 0x700000) == 0x500000) // load word
         {
