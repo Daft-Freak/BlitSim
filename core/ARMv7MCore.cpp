@@ -120,8 +120,8 @@ void ARMv7MCore::doRunCall(uint32_t addr, uint32_t r0, uint32_t r1)
 #ifdef RECOMPILER
             if(attemptToEnterCompiledCode)
             {
-                compiler.run();
                 attemptToEnterCompiledCode = false;
+                compiler.run();
             }
             else
 #endif
@@ -3819,12 +3819,15 @@ void ARMv7MCore::updateTHUMBPC(uint32_t pc, bool fromCompiler)
     if(pc >> 16 == 0x08BA)
     {
         auto lr = loReg(Reg::LR);
+
+        // fake the return (if this isn't a BL)
+        // need to do this before the call because the recompiler has already written the "fake" address to PC
+        if(loReg(Reg::PC) != (lr & ~1))
+            updateTHUMBPC(lr & ~1);
+
         if(apiCallback)
             apiCallback((pc & 0xFFFF) >> 1, regs);
 
-        // fake the return (if this isn't a BL)
-        if(loReg(Reg::PC) != (lr & ~1))
-            updateTHUMBPC(lr & ~1);
         return;
     }
 
