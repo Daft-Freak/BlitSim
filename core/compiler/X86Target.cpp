@@ -1101,19 +1101,26 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                                 builder.mov(rmDst, std::get<uint32_t>(src));
                                 src = RMOperand{*tmp};
                             }
-                            else if(instr.src[1] == 0)
+                            else if(instr.src[1] == 0 && peekLastImmLoad())
                             {
                                 // immediate src1, move src to dest
+                                // (dest is temp, which is unused because it was holding the immediate)
                                 builder.mov(rmDst, std::get<RMOperand>(src).getReg32());
                                 src = *getLastImmLoad(); 
                             }
                             else
                             {
                                 // both reg sources
-                                // save dst, move src to dst
                                 auto tmp = mapReg32(0);
-                                builder.mov(*tmp, rmDst);
-                                builder.mov(rmDst, std::get<RMOperand>(src).getReg32());                                
+                                // if src is already in the temp reg, directly swap it with dest
+                                if(std::get<RMOperand>(src).getReg32() == tmp)
+                                    builder.xchg(rmDst, *tmp);
+                                else
+                                {
+                                    // save dst, move src to dst
+                                    builder.mov(*tmp, rmDst);
+                                    builder.mov(rmDst, std::get<RMOperand>(src).getReg32());
+                                }
                                 src = RMOperand{*tmp};
                             }
                         }
