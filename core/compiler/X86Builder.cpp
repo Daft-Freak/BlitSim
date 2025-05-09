@@ -828,7 +828,7 @@ void X86Builder::push(Reg64 r)
 }
 
 // reg by CL, 8bit
-void X86Builder::rclCL(Reg8 r)
+void X86Builder::rcl(Reg8 r)
 {
     auto reg = static_cast<int>(r);
 
@@ -849,7 +849,7 @@ void X86Builder::rcl(Reg8 r, uint8_t count)
 }
 
 // reg by CL, 8bit
-void X86Builder::rcrCL(Reg8 r)
+void X86Builder::rcr(Reg8 r)
 {
     auto reg = static_cast<int>(r);
 
@@ -875,7 +875,7 @@ void X86Builder::ret()
 }
 
 // reg by CL, 8bit
-void X86Builder::rolCL(Reg8 r)
+void X86Builder::rol(Reg8 r)
 {
     auto reg = static_cast<int>(r);
 
@@ -896,7 +896,7 @@ void X86Builder::rol(Reg8 r, uint8_t count)
 }
 
 // reg by CL
-void X86Builder::rorCL(Reg32 r)
+void X86Builder::ror(Reg32 r)
 {
     auto reg = static_cast<int>(r);
 
@@ -906,7 +906,7 @@ void X86Builder::rorCL(Reg32 r)
 }
 
 // reg by CL, 8bit
-void X86Builder::rorCL(Reg8 r)
+void X86Builder::ror(Reg8 r)
 {
     auto reg = static_cast<int>(r);
 
@@ -938,7 +938,7 @@ void X86Builder::ror(Reg8 r, uint8_t count)
 }
 
 // reg by CL
-void X86Builder::sarCL(Reg32 r)
+void X86Builder::sar(Reg32 r)
 {
     auto reg = static_cast<int>(r);
 
@@ -949,7 +949,7 @@ void X86Builder::sarCL(Reg32 r)
 
 
 // reg by CL, 8bit
-void X86Builder::sarCL(Reg8 r)
+void X86Builder::sar(Reg8 r)
 {
     auto reg = static_cast<int>(r);
 
@@ -1033,7 +1033,7 @@ void X86Builder::setcc(Condition cc, Reg8 dst)
 }
 
 // reg by CL
-void X86Builder::shrCL(Reg32 r)
+void X86Builder::shr(Reg32 r)
 {
     auto reg = static_cast<int>(r);
 
@@ -1043,7 +1043,7 @@ void X86Builder::shrCL(Reg32 r)
 }
 
 // reg by CL, 8bit
-void X86Builder::shrCL(Reg8 r)
+void X86Builder::shr(Reg8 r)
 {
     auto reg = static_cast<int>(r);
 
@@ -1079,7 +1079,7 @@ void X86Builder::shr(Reg8 r, uint8_t count)
 }
 
 // reg by CL
-void X86Builder::shlCL(Reg32 r)
+void X86Builder::shl(Reg32 r)
 {
     auto reg = static_cast<int>(r);
 
@@ -1089,7 +1089,7 @@ void X86Builder::shlCL(Reg32 r)
 }
 
 // reg by CL, 8bit
-void X86Builder::shlCL(Reg8 r)
+void X86Builder::shl(Reg8 r)
 {
     auto reg = static_cast<int>(r);
 

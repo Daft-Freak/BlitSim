@@ -244,24 +244,24 @@ public:
 
     void push(Reg64 r);
 
-    void rclCL(Reg8 dst);
+    void rcl(Reg8 dst);
     void rcl(Reg8 r, uint8_t count);
 
-    void rcrCL(Reg8 dst);
+    void rcr(Reg8 dst);
     void rcr(Reg8 r, uint8_t count);
 
     void ret();
 
-    void rolCL(Reg8 dst);
+    void rol(Reg8 dst);
     void rol(Reg8 r, uint8_t count);
 
-    void rorCL(Reg32 dst);
-    void rorCL(Reg8 dst);
+    void ror(Reg32 dst);
+    void ror(Reg8 dst);
     void ror(Reg32 r, uint8_t count);
     void ror(Reg8 r, uint8_t count);
 
-    void sarCL(Reg32 dst);
-    void sarCL(Reg8 dst);
+    void sar(Reg32 dst);
+    void sar(Reg8 dst);
     void sar(Reg32 r, uint8_t count);
     void sar(Reg8 r, uint8_t count);
 
@@ -272,13 +272,13 @@ public:
 
     void setcc(Condition cc, Reg8 dst);
 
-    void shrCL(Reg32 dst);
-    void shrCL(Reg8 dst);
+    void shr(Reg32 dst);
+    void shr(Reg8 dst);
     void shr(Reg32 r, uint8_t count);
     void shr(Reg8 r, uint8_t count);
 
-    void shlCL(Reg32 dst);
-    void shlCL(Reg8 dst);
+    void shl(Reg32 dst);
+    void shl(Reg8 dst);
     void shl(Reg32 r, uint8_t count);
     void shl(Reg8 r, uint8_t count);
 

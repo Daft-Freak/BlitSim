@@ -1278,7 +1278,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
                     };
 
-                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(Reg32)>(&X86Builder::rorCL), std::mem_fn<void(Reg32, uint8_t)>(&X86Builder::ror), preOp, true))
+                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(Reg32)>(&X86Builder::ror), std::mem_fn<void(Reg32, uint8_t)>(&X86Builder::ror), preOp, true))
                     {
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
                         auto setFlags = flagWriteMask(SourceFlagType::Carry); // only have carry
@@ -1317,7 +1317,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
                     };
 
-                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(Reg32)>(&X86Builder::shlCL), std::mem_fn<void(Reg32, uint8_t)>(&X86Builder::shl), preOp))
+                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(Reg32)>(&X86Builder::shl), std::mem_fn<void(Reg32, uint8_t)>(&X86Builder::shl), preOp))
                     {
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
                         auto setFlags = 0xF0;
@@ -1350,7 +1350,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
                     };
 
-                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(Reg32)>(&X86Builder::sarCL), std::mem_fn<void(Reg32, uint8_t)>(&X86Builder::sar), preOp))
+                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(Reg32)>(&X86Builder::sar), std::mem_fn<void(Reg32, uint8_t)>(&X86Builder::sar), preOp))
                     {
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
                         auto setFlags = 0xF0;
@@ -1383,7 +1383,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
                     };
 
-                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(Reg32)>(&X86Builder::shrCL), std::mem_fn<void(Reg32, uint8_t)>(&X86Builder::shr), preOp))
+                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(Reg32)>(&X86Builder::shr), std::mem_fn<void(Reg32, uint8_t)>(&X86Builder::shr), preOp))
                     {
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
                         auto setFlags = 0xF0;
