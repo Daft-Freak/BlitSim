@@ -1406,14 +1406,22 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                 if(regSize == 32)
                 {
-                    auto dst = checkValue32(instr.dst[0], 0);
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
                     auto src = checkValue32(instr.src[0], Value_Memory);
                     
                     if(src.index() && dst.index())
                     {
                         auto rmDst = std::get<RMOperand>(dst);
                         auto rmSrc = std::get<RMOperand>(src);
-                        builder.movsxB(rmDst.getReg32(), rmSrc);
+                        if(rmDst.isMem())
+                        {
+                            // insert extra mov if dst is memory
+                            auto tmp = mapReg32(0);
+                            builder.movsxB(*tmp, rmSrc);
+                            builder.mov(rmDst, *tmp);
+                        }
+                        else
+                            builder.movsxB(rmDst.getReg32(), rmSrc);
                     }
                 }
                 else
@@ -1427,14 +1435,23 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                 if(regSize == 32)
                 {
-                    auto dst = checkValue32(instr.dst[0], 0);
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
                     auto src = checkValue32(instr.src[0], Value_Memory);
                     
                     if(src.index() && dst.index())
                     {
                         auto rmDst = std::get<RMOperand>(dst);
                         auto rmSrc = std::get<RMOperand>(src);
-                        builder.movsxW(rmDst.getReg32(), rmSrc);
+
+                        if(rmDst.isMem())
+                        {
+                            // insert extra mov if dst is memory
+                            auto tmp = mapReg32(0);
+                            builder.movsxW(*tmp, rmSrc);
+                            builder.mov(rmDst, *tmp);
+                        }
+                        else
+                            builder.movsxW(rmDst.getReg32(), rmSrc);
                     }
                 }
                 else
