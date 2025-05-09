@@ -912,10 +912,11 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 if(regSize == 32)
                 {
                     auto src = checkReg32(instr.src[1], Reg32::R8D);
-                    auto dst = checkReg32(instr.dst[0], Reg32::R9D);
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
 
-                    if(src && dst)
+                    if(src && dst.index())
                     {
+                        auto rmDst = std::get<RMOperand>(dst);
                         bool writesC = writesFlag(instr.flags, SourceFlagType::Carry);
                         // carry in (and clear it if we're writing it)
                         if(writesC)
@@ -923,14 +924,14 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         else
                             builder.bt(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
 
-                        builder.adc(*dst, *src);
+                        builder.adc(rmDst, *src);
 
                         // copy C flag if we need it
                         if(writesC && writesFlag(instr.flags, SourceFlagType::Overflow))
                             builder.setcc(Condition::B, Reg8::R11B);
                         
                         // flags
-                        setFlags32(RMOperand(*dst), Reg32::R11D, instr.flags);
+                        setFlags32(rmDst, Reg32::R11D, instr.flags);
                     }
                 }
                 else
@@ -1151,10 +1152,11 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 if(regSize == 32)
                 {
                     auto src = checkReg32(instr.src[1], Reg32::R8D);
-                    auto dst = checkReg32(instr.dst[0], Reg32::R9D);
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
 
-                    if(src && dst)
+                    if(src && dst.index())
                     {
+                        auto rmDst = std::get<RMOperand>(dst);
                         bool writesC = writesFlag(instr.flags, SourceFlagType::Carry);
                         // carry in (and clear it if we're writing it)
                         if(writesC)
@@ -1163,7 +1165,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.bt(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
                         builder.cmc(); // inverted
 
-                        builder.sbb(*dst, *src);
+                        builder.sbb(rmDst, *src);
 
                         // copy _inverted_ C flag if we need it
                         // assuming arm inverted carry flag
@@ -1171,7 +1173,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.setcc(Condition::AE, Reg8::R11B);
 
                         // flags
-                        setFlags32(RMOperand(*dst), Reg32::R11D, instr.flags, true);
+                        setFlags32(RMOperand(rmDst), Reg32::R11D, instr.flags, true);
                     }
                 }
                 else
