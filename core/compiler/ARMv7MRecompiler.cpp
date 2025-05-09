@@ -191,15 +191,39 @@ static void addInstruction(GenBlockInfo &genBlock, GenOpInfo op, uint8_t len = 0
 }
 
 // common patterns
-void loadWithOffset(GenBlockInfo &genBlock, int size, GenReg base, int offset, GenReg dst, int cycles, int len = 0, int flags = 0)
+void loadWithOffset(GenBlockInfo &genBlock, int size, GenReg base, GenReg offset, int shift, GenReg dst, int len = 0, int flags = 0)
 {
-    if(offset)
+    // base + off << shift
+    // TODO: optimise shift == 0?
+    addInstruction(genBlock, loadImm(shift));
+    addInstruction(genBlock, alu(GenOpcode::ShiftLeft, offset, GenReg::Temp, GenReg::Temp));
+    addInstruction(genBlock, alu(GenOpcode::Add, base, GenReg::Temp, GenReg::Temp));
+    
+    addInstruction(genBlock, load(size, GenReg::Temp, dst), len, flags);
+}
+
+void loadWithOffset(GenBlockInfo &genBlock, int size, GenReg base, int offset, bool writeback, bool index, GenReg dst, int len = 0, int flags = 0)
+{
+    if(index)
     {
         addInstruction(genBlock, loadImm(offset));
         addInstruction(genBlock, alu(GenOpcode::Add, base, GenReg::Temp, GenReg::Temp));
     }
 
-    addInstruction(genBlock, load(size, offset ? GenReg::Temp : base, dst, cycles), len, flags);
+    addInstruction(genBlock, load(size, index ? GenReg::Temp : base, dst), writeback ? 0 : len, flags);
+
+    // write back adjusted base
+    if(writeback)
+    {
+        // need to redo add even if index is true (can't reuse the temp)
+        addInstruction(genBlock, loadImm(offset));
+        addInstruction(genBlock, alu(GenOpcode::Add, base, GenReg::Temp, base), len);
+    }
+}
+
+void loadWithOffset(GenBlockInfo &genBlock, int size, GenReg base, int offset, GenReg dst, int cycles, int len = 0, int flags = 0)
+{
+    loadWithOffset(genBlock, size, base, offset, false, offset != 0, dst, len, flags);
 }
 
 void storeWithOffset(GenBlockInfo &genBlock, int size, GenReg base, int offset, GenReg dst, int cycles, int len = 0, int flags = 0)
@@ -2221,14 +2245,7 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
                 if(op1 == 1) // +12 bit imm
                 {
                     auto offset = (opcode32 & 0xFFF);
-
-                    if(offset)
-                    {
-                        addInstruction(loadImm(offset));
-                        addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, GenReg::Temp));
-                    }
-
-                    addInstruction(load(4, offset ? GenReg::Temp : reg(baseReg), dst, 0), isPC ? 0 : 4);
+                    loadWithOffset(genBlock, 4, reg(baseReg), offset, dst, 0, 4);
                 }
                 else
                 {
@@ -2238,25 +2255,13 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
                     bool add = opcode32 & (1 << 9);
                     bool index = opcode32 & (1 << 10);
 
-                    if(index)
-                    {
-                        addInstruction(loadImm(add ? offset : -offset));
-                        addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, GenReg::Temp));
-                    }
-
-                    addInstruction(load(4, index ? GenReg::Temp : reg(baseReg), dst, 0), (writeback || isPC) ? 0 : 4);
-
-                    // write back adjusted base
-                    if(writeback)
-                    {
-                        // need to redo add even if index is true (can't reuse the temp)
-                        addInstruction(loadImm(add ? offset : -offset));
-                        addInstruction(alu(GenOpcode::Add, reg(baseReg), GenReg::Temp, reg(baseReg)), isPC ? 0 : 4);
-                    }
+                    loadWithOffset(genBlock, 4, reg(baseReg), add ? offset : -offset, writeback, index, dst, 4);
                 }
 
                 if(isPC)
                 {
+                    genBlock.instructions.back().len = 0;
+
                     // clear thumb bit and jump
                     addInstruction(loadImm(~1u));
                     addInstruction(alu(GenOpcode::And, GenReg::Temp, GenReg::Temp2, GenReg::Temp));
