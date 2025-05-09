@@ -2224,13 +2224,26 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
 
             if(baseReg == 15) // LDR (literal)
             {
-                printf("unhandled op in convertToGeneric %08X (load lit)\n", opcode32 & 0xFF000000);
-                return true;
+                bool add = opcode32 & (1 << 23);
+
+                auto offset = (opcode32 & 0xFFF);
+
+                uint32_t addr = pc & ~2;
+                
+                if(add)
+                    addr += offset;
+                else
+                    addr -= offset;
+
+                addInstruction(loadImm(mem.read<uint32_t>(addr)));
+                addInstruction(move(GenReg::Temp, reg(dstReg)), 4);
             }
             else if(op1 == 0 && op2 == 0) // LDR (register)
             {
-                printf("unhandled op in convertToGeneric %08X (load w reg)\n", opcode32 & 0xFF000000);
-                return true;
+                auto mReg = reg(opcode32 & 0xF);
+                auto shift = (opcode32 >> 4) & 3;
+
+                loadWithOffset(genBlock, 4, reg(baseReg), mReg, shift, reg(dstReg), 4);
             }
             else if(op1 == 0 && (op2 & 0x3C) == 0x38) // LDRT
             {
@@ -2274,13 +2287,102 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
         }
         else if((opcode32 & 0x700000) == 0x300000) // load halfword, memory hints
         {
-            printf("unhandled op in convertToGeneric %08X (load h/hint)\n", opcode32 & 0xFF000000);
-            return true;
+            auto op1 = (opcode32 >> 23) & 3;
+            auto op2 = (opcode32 >> 6) & 0x3F;
+        
+            auto baseReg = (opcode32 >> 16) & 0xF;
+            auto dstReg = (opcode32 >> 12) & 0xF;
+
+            bool isSigned = op1 & 2;
+
+            if(dstReg == 15) // unallocated hints
+            {
+                assert(false);
+                return true;
+            }
+            else if(baseReg == 15) // LDR(S)H (literal)
+            {
+                printf("unhandled op in convertToGeneric %08X (load h lit)\n", opcode32 & 0xFF000000);
+                return true;
+            }
+            else if(!(op1 & 1) && op2 == 0) // LDR(S)H (register)
+            {
+                auto mReg = reg(opcode32 & 0xF);
+                auto shift = (opcode32 >> 4) & 3;
+
+                loadWithOffset(genBlock, 2, reg(baseReg), mReg, shift, reg(dstReg), 4, isSigned ? GenOp_SignExtend : 0);
+            }
+            else // LDR(S)H (immediate)
+            {
+                if(op1 & 1) // + 12 bit imm
+                {
+                    auto offset = (opcode32 & 0xFFF);
+                    loadWithOffset(genBlock, 2, reg(baseReg), offset, reg(dstReg), 0, 4, isSigned ? GenOp_SignExtend : 0);
+                }
+                else // +/- 8 bit imm
+                {
+                    auto offset = (opcode32 & 0xFF);
+
+                    bool writeback = opcode32 & (1 << 8);
+                    bool add = opcode32 & (1 << 9);
+                    bool index = opcode32 & (1 << 10);
+                    // !writeback && add && index is LDR(S)HT, but we can just handle it the same as LDR(S)H
+
+                    loadWithOffset(genBlock, 2, reg(baseReg), add ? offset : -offset, writeback, index, reg(dstReg), 4, isSigned ? GenOp_SignExtend : 0);
+                }
+            }
         }
         else if((opcode32 & 0x700000) == 0x100000) // load byte, memory hints
         {
-            printf("unhandled op in convertToGeneric %08X (load b/hint)\n", opcode32 & 0xFF000000);
-            return true;
+            auto op1 = (opcode32 >> 23) & 3;
+            auto op2 = (opcode32 >> 6) & 0x3F;
+        
+            auto baseReg = (opcode32 >> 16) & 0xF;
+            auto dstReg = (opcode32 >> 12) & 0xF;
+
+            bool isSigned = op1 & 2;
+
+            if(dstReg == 15) // preload
+            {
+                // this is a hint
+                // we do need to emit something though
+                GenOpInfo op{};
+                op.opcode = GenOpcode::NOP;
+                op.cycles = 1;
+
+                addInstruction(op, 4);
+            }
+            else if(baseReg == 15) // LDR(S)B (literal)
+            {
+                printf("unhandled op in convertToGeneric %08X (load b lit)\n", opcode32 & 0xFF000000);
+                return true;
+            }
+            else if(!(op1 & 1) && op2 == 0) // LDR(S)B (register)
+            {
+                auto mReg = reg(opcode32 & 0xF);
+                auto shift = (opcode32 >> 4) & 3;
+
+                loadWithOffset(genBlock, 1, reg(baseReg), mReg, shift, reg(dstReg), 4, isSigned ? GenOp_SignExtend : 0);
+            }
+            else // LDR(S)B (immediate)
+            {
+                if(op1 & 1) // + 12 bit imm
+                {
+                    auto offset = (opcode32 & 0xFFF);
+                    loadWithOffset(genBlock, 1, reg(baseReg), offset, reg(dstReg), 0, 4, isSigned ? GenOp_SignExtend : 0);
+                }
+                else // +/- 8 bit imm
+                {
+                    auto offset = (opcode32 & 0xFF);
+
+                    bool writeback = opcode32 & (1 << 8);
+                    bool add = opcode32 & (1 << 9);
+                    bool index = opcode32 & (1 << 10);
+                    // !writeback && add && index is LDR(S)BT, but we can just handle it the same as LDR(S)B
+
+                    loadWithOffset(genBlock, 1, reg(baseReg), add ? offset : -offset, writeback, index, reg(dstReg), 4, isSigned ? GenOp_SignExtend : 0);
+                }
+            }
         }
         else // store single data item
         {
