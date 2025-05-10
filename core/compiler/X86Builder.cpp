@@ -180,10 +180,7 @@ void X86Builder::call(int disp)
 
     write(0xE8); // opcode
 
-    write(disp);
-    write(disp >> 8);
-    write(disp >> 16);
-    write(disp >> 24);
+    encode(static_cast<uint32_t>(disp));
 }
 
 // indirect
@@ -298,10 +295,7 @@ void X86Builder::jcc(Condition cc, int disp)
         write(0x0F); // two byte opcode
         write(0x80 | static_cast<int>(cc)); // opcode
 
-        write(disp);
-        write(disp >> 8);
-        write(disp >> 16);
-        write(disp >> 24);
+        encode(static_cast<uint32_t>(disp));
     }
 }
 
@@ -324,10 +318,7 @@ void X86Builder::jmp(int disp, bool forceLong)
 
         write(0xE9); // opcode
 
-        write(disp);
-        write(disp >> 8);
-        write(disp >> 16);
-        write(disp >> 24);
+        encode(static_cast<uint32_t>(disp));
     }
 }
 
@@ -425,14 +416,7 @@ void X86Builder::mov(Reg64 r, uint64_t imm)
     write(0xB8 | (reg & 7)); // opcode
 
     // immediate
-    write(imm);
-    write(imm >> 8);
-    write(imm >> 16);
-    write(imm >> 24);
-    write(imm >> 32);
-    write(imm >> 40);
-    write(imm >> 48);
-    write(imm >> 56);
+    encode(imm);
 }
 
 // imm -> reg
@@ -444,10 +428,7 @@ void X86Builder::mov(Reg32 r, uint32_t imm)
     write(0xB8 | (reg & 7)); // opcode
 
     // immediate
-    write(imm);
-    write(imm >> 8);
-    write(imm >> 16);
-    write(imm >> 24);
+    encode(imm);
 }
 
 // imm -> reg, 8 bit
@@ -1013,10 +994,7 @@ void X86Builder::encode(uint8_t opcode, int subOp, RMOperand rm, uint32_t imm)
     encode(opcode, subOp, rm, 32);
 
     // immediate
-    write(imm);
-    write(imm >> 8);
-    write(imm >> 16);
-    write(imm >> 24);
+    encode(imm);
 }
 
 void X86Builder::encode(uint8_t opcode, int subOp, RMOperand rm, uint8_t imm)
@@ -1069,12 +1047,7 @@ void X86Builder::encodeModRM(RMOperand rm, int reg2Op, bool isReg)
     if(mod == 1)
         write(rm.disp);
     else if(mod == 2)
-    {
-        write(rm.disp);
-        write(rm.disp >> 8);
-        write(rm.disp >> 16);
-        write(rm.disp >> 24);
-    }
+        encode(static_cast<uint32_t>(rm.disp));
 }
 
 void X86Builder::encodeREX(bool w, int reg, int index, int base)
@@ -1091,4 +1064,24 @@ void X86Builder::encodeREX(bool w, int reg, int index, int base)
 void X86Builder::encodeREX(bool w, int reg, RMOperand rm)
 {
     encodeREX(w, reg, static_cast<int>(rm.index), static_cast<int>(rm.base));
+}
+
+void X86Builder::encode(uint32_t v)
+{
+    write(v);
+    write(v >> 8);
+    write(v >> 16);
+    write(v >> 24);
+}
+
+void X86Builder::encode(uint64_t v)
+{
+    write(v);
+    write(v >> 8);
+    write(v >> 16);
+    write(v >> 24);
+    write(v >> 32);
+    write(v >> 40);
+    write(v >> 48);
+    write(v >> 56);
 }

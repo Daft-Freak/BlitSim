@@ -350,6 +350,9 @@ private:
     void encodeREX(bool w, int reg, int index, int base);
     void encodeREX(bool w, int reg, RMOperand rm);
 
+    void encode(uint32_t v);
+    void encode(uint64_t v);
+
     uint8_t *ptr, *endPtr;
     uint8_t *savedPtr, *savedEndPtr;
 
