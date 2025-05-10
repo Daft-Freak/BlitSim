@@ -2298,7 +2298,30 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
             }
             else if(op2 == 0)
             {
-                printf("unhandled op in convertToGeneric %08X (dp reg shift)\n", opcode32 & 0xFFF00000);
+                bool setFlags = opcode32 & (1 << 20);
+                auto dReg = reg((opcode32 >> 8) & 0xF);
+                auto mReg = reg(opcode32 & 0xF);
+
+                switch(op1 >> 1)
+                {
+                    // LSL, LSR, ASR, ROR
+                    case 0: // LSL
+                        addInstruction(alu(GenOpcode::ShiftLeft, reg(nReg), mReg, dReg), 4, setFlags ? (preserveV | preserveC | writeC | writeZ | writeN) : 0);
+                        break;
+                    case 1: // LSR
+                        addInstruction(alu(GenOpcode::ShiftRightLogic, reg(nReg), mReg, dReg), 4, setFlags ? (preserveV | preserveC | writeC | writeZ | writeN) : 0);
+                        break;
+                    case 2: // ASR
+                        addInstruction(alu(GenOpcode::ShiftRightArith, reg(nReg), mReg, dReg), 4, setFlags ? (preserveV | preserveC | writeC | writeZ | writeN) : 0);
+                        break;
+                    case 3: // ROR
+                        addInstruction(alu(GenOpcode::RotateRight, reg(nReg), mReg, dReg), 4, setFlags ? (preserveV | preserveC | writeC | writeZ | writeN) : 0);
+                        break;
+                    
+                    default:
+                        printf("unhandled op in convertToGeneric %08X (dp reg shift)\n", opcode32 & 0xFFF00000);
+                }
+
                 return true;
             }
             else if(op2 & 0b1000)
