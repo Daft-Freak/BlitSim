@@ -2016,6 +2016,58 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
 
             switch(op)
             {
+                case 0x0:
+                {
+                    if(nReg == 15) // ADR
+                    {
+                        printf("unhandled dp imm op in convertToGeneric %x\n", op);
+                        return true;
+                    }
+                    else // ADDW
+                    {
+                        auto imm = ((opcode32 >> 15) & 0x800) | ((opcode32 >> 4) & 0x700) | (opcode32 & 0xFF);
+                        addInstruction(loadImm(imm));
+                        addInstruction(alu(GenOpcode::Add, reg(nReg), GenReg::Temp, reg(dstReg)), 4);
+                    }
+                    break;
+                }
+
+                case 0x2: // MOVW
+                {
+                    auto imm = ((opcode32 >> 4) & 0xF000) | ((opcode32 >> 15) & 0x800) | ((opcode32 >> 4) & 0x700) | (opcode32 & 0xFF);
+                    addInstruction(loadImm(imm));
+                    addInstruction(move(GenReg::Temp, reg(dstReg)), 4);
+                    break;
+                }
+
+                case 0x5:
+                {
+                    if(nReg == 15) // ADR
+                    {
+                        printf("unhandled dp imm op in convertToGeneric %x\n", op);
+                        return true;
+                    }
+                    else // SUBW
+                    {
+                        auto imm = ((opcode32 >> 15) & 0x800) | ((opcode32 >> 4) & 0x700) | (opcode32 & 0xFF);
+                        addInstruction(loadImm(imm));
+                        addInstruction(alu(GenOpcode::Subtract, reg(nReg), GenReg::Temp, reg(dstReg)), 4);
+                    }
+                    break;
+                }
+
+                case 0x6: // MOVT
+                {
+                    auto imm = ((opcode32 >> 4) & 0xF000) | ((opcode32 >> 15) & 0x800) | ((opcode32 >> 4) & 0x700) | (opcode32 & 0xFF);
+                    // mask out top half
+                    addInstruction(loadImm(0xFFFF));
+                    addInstruction(alu(GenOpcode::And, reg(dstReg), GenReg::Temp, reg(dstReg)));
+                    // or in new top half
+                    addInstruction(loadImm(imm << 16));
+                    addInstruction(alu(GenOpcode::Or, reg(dstReg), GenReg::Temp, reg(dstReg)), 4);
+                    break;
+                }
+
                 case 0xA: // SBFX
                 case 0xE: // UBFX
                 {
