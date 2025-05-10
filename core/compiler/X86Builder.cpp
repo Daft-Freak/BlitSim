@@ -382,13 +382,19 @@ void X86Builder::dec(Reg8 r)
 // reg -> reg
 void X86Builder::imul(Reg32 dst, Reg32 src)
 {
-    auto dstReg = static_cast<int>(dst);
-    auto srcReg = static_cast<int>(src);
+    imul(dst, RMOperand(src));
+}
 
-    encodeREX(false, dstReg, 0, srcReg);
+void X86Builder::imul(Reg32 dst, RMOperand src)
+{
+    assert(src.w == 0 || src.w == 3);
+
+    auto dstReg = static_cast<int>(dst);
+
+    encodeREX(false, dstReg, src);
     write(0x0F); // two byte opcode
     write(0xAF); // opcode
-    encodeModRM(srcReg, dstReg);
+    encodeModRM(src, dstReg);
 }
 
 // reg, 16 bit

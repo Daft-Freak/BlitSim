@@ -188,6 +188,7 @@ public:
     void dec(Reg8 r);
 
     void imul(Reg32 dst, Reg32 src);
+    void imul(Reg32 dst, RMOperand src);
 
     void inc(Reg16 r);
     void inc(Reg8 r);
