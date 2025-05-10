@@ -332,12 +332,15 @@ private:
 
     // generic/sub-opcodes
     void encode(uint8_t opcode, int regOp, RMOperand rm, int width, bool isReg = false);
+    void encode0F(uint8_t opcode, int regOp, RMOperand rm, int width, bool isReg = false);
 
     // helpers for 2nd register operand
     void encode(uint8_t opcode, RMOperand rm, Reg64 r) {encode(opcode, static_cast<int>(r), rm, 64, true);}
     void encode(uint8_t opcode, RMOperand rm, Reg32 r) {encode(opcode, static_cast<int>(r), rm, 32, true);}
     void encode(uint8_t opcode, RMOperand rm, Reg16 r) {encode(opcode, static_cast<int>(r), rm, 16, true);}
     void encode(uint8_t opcode, RMOperand rm, Reg8 r)  {encode(opcode, static_cast<int>(r), rm,  8, true);}
+
+    void encode0F(uint8_t opcode, RMOperand rm, Reg32 r) {encode0F(opcode, static_cast<int>(r), rm, 32, true);}
 
     // for immediate operands
     void encode(uint8_t opcode, int subOp, RMOperand rm, uint32_t imm);

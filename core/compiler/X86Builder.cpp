@@ -161,23 +161,13 @@ void X86Builder::andD(RMOperand dst, int8_t imm)
 
 void X86Builder::bt(Reg32 base, uint8_t off)
 {
-    auto baseReg = static_cast<int>(base);
-
-    encodeREX(false, 0, 0, baseReg);
-    write(0x0F); // two byte op
-    write(0xBA); // opcode
-    encodeModRM(baseReg, 4);
+    encode0F(0xBA, 4, RMOperand(base), 32);
     write(off); // offset
 }
 
 void X86Builder::btr(Reg32 base, uint8_t off)
 {
-    auto baseReg = static_cast<int>(base);
-
-    encodeREX(false, 0, 0, baseReg);
-    write(0x0F); // two byte op
-    write(0xBA); // opcode
-    encodeModRM(baseReg, 6);
+    encode0F(0xBA, 6, RMOperand(base), 32);
     write(off); // offset
 }
 
@@ -273,14 +263,7 @@ void X86Builder::imul(Reg32 dst, Reg32 src)
 
 void X86Builder::imul(Reg32 dst, RMOperand src)
 {
-    assert(src.w == 0 || src.w == 3);
-
-    auto dstReg = static_cast<int>(dst);
-
-    encodeREX(false, dstReg, src);
-    write(0x0F); // two byte opcode
-    write(0xAF); // opcode
-    encodeModRM(src, dstReg);
+    encode0F(0xAF, src, dst);
 }
 
 // reg, 16 bit
@@ -505,57 +488,30 @@ void X86Builder::movsx(Reg32 dst, Reg8 src)
 
 void X86Builder::movsxW(Reg32 dst, RMOperand src)
 {
-    auto dstReg = static_cast<int>(dst);
-
-    encodeREX(false, dstReg, src);
-    write(0x0F); // two byte opcode
-    write(0xBF); // opcode, w = 1
-    encodeModRM(src, dstReg);
+    encode0F(0xBF, src, dst);
 }
 
 void X86Builder::movsxB(Reg32 dst, RMOperand src)
 {
-    auto dstReg = static_cast<int>(dst);
-
-    encodeREX(false, dstReg, src);
-    write(0x0F); // two byte opcode
-    write(0xBE); // opcode, w = 0
-    encodeModRM(src, dstReg);
+    encode0F(0xBE, src, dst);
 }
 
 // zero extend, reg -> reg, 16 bit
 void X86Builder::movzx(Reg32 dst, Reg16 src)
 {
-    auto dstReg = static_cast<int>(dst);
-    auto srcReg = static_cast<int>(src);
-
-    encodeREX(false, dstReg, 0, srcReg);
-    write(0x0F); // two byte opcode
-    write(0xB7); // opcode, w = 1
-    encodeModRM(srcReg, dstReg);
+    movzxW(dst, RMOperand(src));
 }
 
 // zero extend, reg -> reg, 8 bit
 void X86Builder::movzx(Reg32 dst, Reg8 src)
 {
-    auto dstReg = static_cast<int>(dst);
-    auto srcReg = static_cast<int>(src);
-
-    encodeREX(false, dstReg, 0, srcReg);
-    write(0x0F); // two byte opcode
-    write(0xB6); // opcode, w = 0
-    encodeModRMReg8(srcReg, dstReg);
+    encode0F(0xB6, RMOperand(src), dst);
 }
 
 // zero extend, mem -> reg, 16 bit
 void X86Builder::movzxW(Reg32 dst, RMOperand src)
 {
-    auto reg = static_cast<int>(dst);
-
-    encodeREX(false, reg, src);
-    write(0x0F); // two byte opcode
-    write(0xB7); // opcode, w = 1
-    encodeModRM(src, reg);
+    encode0F(0xB7, src, dst);
 }
 
 // reg
@@ -765,12 +721,8 @@ void X86Builder::sbb(Reg8 dst, uint8_t imm)
 // -> reg
 void X86Builder::setcc(Condition cc, Reg8 dst)
 {
-    auto dstReg = static_cast<int>(dst);
-
-    encodeREX(false, 0, 0, dstReg);
-    write(0x0F); // two byte opcode
-    write(0x90 | static_cast<int>(cc)); // opcode
-    encodeModRM(dstReg);
+    // width here is a lie, but there are no width overrides for these
+    encode0F(0x90 | static_cast<int>(cc), 0, RMOperand(dst), 32);
 }
 
 // reg by CL
@@ -1037,6 +989,22 @@ void X86Builder::encode(uint8_t opcode, int regOp, RMOperand rm, int width, bool
 
     encodeREX(width == 64, regOp, rm);
     write(opcode | (width > 8 ? 1 : 0)); // set w bit if not 8bit
+    encodeModRM(rm, regOp, isReg);
+}
+
+void X86Builder::encode0F(uint8_t opcode, int regOp, RMOperand rm, int width, bool isReg)
+{
+    // width handling is... less consistent here...
+
+    // make sure width is sensible
+    assert(width == 16 || width == 32 || width == 64);
+
+    if(width == 16)
+        write(0x66); // 16 bit override
+
+    encodeREX(width == 64, regOp, rm);
+    write(0x0F);
+    write(opcode);
     encodeModRM(rm, regOp, isReg);
 }
 
