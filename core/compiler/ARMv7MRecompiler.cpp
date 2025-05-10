@@ -760,9 +760,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                 addInstruction(alu(GenOpcode::And, GenReg::CPSR, GenReg::Temp, GenReg::CPSR));
 
                                 // jump (without clearing low bit, will use to correct flags later)
-                                addInstruction(jump(GenCondition::Always, reg(srcReg)), 2);
+                                addInstruction(jump(GenCondition::Always, reg(srcReg)), 2, h1 ? GenOp_Call : 0);
 
-                                if(pc > maxBranch)
+                                if(pc > maxBranch && !h1)
                                     done = true;
                             }
                             break;
