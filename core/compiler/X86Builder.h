@@ -346,9 +346,7 @@ private:
     void encode(uint8_t opcode, int subOp, RMOperand rm, uint32_t imm);
     void encode(uint8_t opcode, int subOp, RMOperand rm, uint8_t imm);
 
-    void encodeModRM(int reg1, int reg2Op = 0); // mod 3
     void encodeModRM(RMOperand rm, int reg2Op = 0, bool isReg = true);
-    void encodeModRMReg8(int reg1, int reg2); // mod 3 (extra validation fot 8bit regs)
     void encodeREX(bool w, int reg, int index, int base);
     void encodeREX(bool w, int reg, RMOperand rm);
 

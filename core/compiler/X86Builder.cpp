@@ -189,11 +189,11 @@ void X86Builder::call(int disp)
 // indirect
 void X86Builder::call(Reg64 r)
 {
-    auto reg = static_cast<int>(r);
+    auto rm = RMOperand(r);
 
-    encodeREX(false, 0, 0, reg);
+    encodeREX(false, 0, rm);
     write(0xFF); // opcode
-    encodeModRM(reg, 2);
+    encodeModRM(rm, 2);
 }
 
 void X86Builder::cmc()
@@ -334,11 +334,11 @@ void X86Builder::jmp(int disp, bool forceLong)
 // indirect
 void X86Builder::jmp(Reg64 r)
 {
-    auto reg = static_cast<int>(r);
+    auto rm = RMOperand(r);
 
-    encodeREX(false, 0, 0, reg);
+    encodeREX(false, 0, rm);
     write(0xFF); // opcode
-    encodeModRM(reg, 4);
+    encodeModRM(rm, 4);
 }
 
 void X86Builder::lea(Reg64 dst, RMOperand m)
@@ -1025,11 +1025,6 @@ void X86Builder::encode(uint8_t opcode, int subOp, RMOperand rm, uint8_t imm)
     write(imm);
 }
 
-void X86Builder::encodeModRM(int reg1, int reg2Op)
-{
-    write(0xC0 | (reg2Op & 7) << 3 | (reg1 & 7)); // mod = 3, reg 2 or sub-opcode, reg 1
-}
-
 void X86Builder::encodeModRM(RMOperand rm, int reg2Op, bool isReg)
 {
     auto baseReg = static_cast<int>(rm.base);
@@ -1080,14 +1075,6 @@ void X86Builder::encodeModRM(RMOperand rm, int reg2Op, bool isReg)
         write(rm.disp >> 16);
         write(rm.disp >> 24);
     }
-}
-
-void X86Builder::encodeModRMReg8(int reg1, int reg2)
-{
-    // if one reg is >= 8, the other can't be xH (4-7)
-    assert((reg2 < 8 || reg1 >= 8 || reg1 < 4) && (reg1 < 8 || reg2 >= 8 || reg2 < 4));
-
-    encodeModRM(reg1, reg2);
 }
 
 void X86Builder::encodeREX(bool w, int reg, int index, int base)
