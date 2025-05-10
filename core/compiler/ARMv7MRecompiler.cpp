@@ -1349,6 +1349,8 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
         ::addInstruction(genBlock, op, len, flags);
     };
 
+    auto &mem = cpu.getMem();
+
     auto op1 = opcode32 >> 27;
 
     if(op1 == 0b11101)
