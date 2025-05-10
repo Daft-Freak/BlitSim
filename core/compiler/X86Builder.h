@@ -213,8 +213,6 @@ public:
     void mov(Reg32 dst, RMOperand src);
     void mov(Reg16 dst, RMOperand src);
     void mov(Reg8 dst, RMOperand src);
-    void mov(RMOperand dst, Reg32 src, int w); // internal
-    void mov(Reg32 dst, RMOperand src, int w); // internal
     void mov(Reg64 r, uint64_t imm);
     void mov(Reg32 r, uint32_t imm);
     void mov(Reg8 r, uint8_t imm);
@@ -332,8 +330,21 @@ public:
 private:
     void write(uint8_t b);
 
+    // generic/sub-opcodes
+    void encode(uint8_t opcode, int regOp, RMOperand rm, int width, bool isReg = false);
+
+    // helpers for 2nd register operand
+    void encode(uint8_t opcode, RMOperand rm, Reg64 r) {encode(opcode, static_cast<int>(r), rm, 64, true);}
+    void encode(uint8_t opcode, RMOperand rm, Reg32 r) {encode(opcode, static_cast<int>(r), rm, 32, true);}
+    void encode(uint8_t opcode, RMOperand rm, Reg16 r) {encode(opcode, static_cast<int>(r), rm, 16, true);}
+    void encode(uint8_t opcode, RMOperand rm, Reg8 r)  {encode(opcode, static_cast<int>(r), rm,  8, true);}
+
+    // for immediate operands
+    void encode(uint8_t opcode, int subOp, RMOperand rm, uint32_t imm);
+    void encode(uint8_t opcode, int subOp, RMOperand rm, uint8_t imm);
+
     void encodeModRM(int reg1, int reg2Op = 0); // mod 3
-    void encodeModRM(RMOperand rm, int reg2Op = 0);
+    void encodeModRM(RMOperand rm, int reg2Op = 0, bool isReg = true);
     void encodeModRMReg8(int reg1, int reg2); // mod 3 (extra validation fot 8bit regs)
     void encodeREX(bool w, int reg, int index, int base);
     void encodeREX(bool w, int reg, RMOperand rm);
