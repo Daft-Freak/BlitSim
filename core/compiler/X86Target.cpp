@@ -1024,19 +1024,30 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
             {
                 auto regSize = sourceInfo.registers[instr.src[0]].size;
 
-                checkSingleSource();
+                bool swapped = checkSingleSource(true);
 
                 if(regSize == 32)
                 {
-                    auto src = checkReg32(instr.src[1]);
-                    auto dst = checkReg32(instr.dst[0]);
+                    auto src = checkValue32(instr.src[swapped ? 0 : 1], Value_Memory);
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
 
-                    if(src && dst)
+                    if(src.index() && dst.index())
                     {
-                        builder.imul(*dst, *src);
+                        auto rmDst = std::get<RMOperand>(dst);
+
+                        if(rmDst.isMem())
+                        {
+                            // load/store dest if memory
+                            // (could save some movs if we had to move src0 to dst earlier...)
+                            builder.mov(Reg32::R9D, rmDst);
+                            builder.imul(Reg32::R9D, std::get<RMOperand>(src));
+                            builder.mov(rmDst, Reg32::R9D);
+                        }
+                        else
+                            builder.imul(rmDst.getReg32(), std::get<RMOperand>(src));
                     
                         assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
-                        setFlags32(RMOperand(*dst), {}, instr.flags, false, 0);
+                        setFlags32(rmDst, {}, instr.flags, false, 0);
                     }
                 }
                 else
