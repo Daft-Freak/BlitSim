@@ -125,6 +125,17 @@ inline GenOpInfo alu(GenOpcode op, GenReg src0, GenReg src1, GenReg dst, int cyc
     return ret;
 }
 
+inline GenOpInfo alu(GenOpcode op, GenReg src0, GenReg dst, int cycles = 0)
+{
+    GenOpInfo ret{};
+    ret.opcode = op;
+    ret.cycles = cycles;
+    ret.src[0] = static_cast<uint8_t>(src0);
+    ret.dst[0] = static_cast<uint8_t>(dst);
+
+    return ret;
+}
+
 inline GenOpInfo compare(GenReg src0, GenReg src1, int cycles = 0)
 {
     GenOpInfo ret{};
@@ -132,17 +143,6 @@ inline GenOpInfo compare(GenReg src0, GenReg src1, int cycles = 0)
     ret.cycles = cycles;
     ret.src[0] = static_cast<uint8_t>(src0);
     ret.src[1] = static_cast<uint8_t>(src1);
-
-    return ret;
-}
-
-inline GenOpInfo not_(GenReg src0, GenReg dst, int cycles = 0)
-{
-    GenOpInfo ret{};
-    ret.opcode = GenOpcode::Not;
-    ret.cycles = cycles;
-    ret.src[0] = static_cast<uint8_t>(src0);
-    ret.dst[0] = static_cast<uint8_t>(dst);
 
     return ret;
 }
@@ -801,13 +801,13 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             break;
                         case 0xE: // BIC
                         {
-                            addInstruction(not_(srcReg, GenReg::Temp));
+                            addInstruction(alu(GenOpcode::Not, srcReg, GenReg::Temp));
                             addInstruction(alu(GenOpcode::And, dstReg, GenReg::Temp, dstReg), 2, preserveV | preserveC | writeZ | writeN);
                             break;
                         }
                         case 0xF: // MVN
                         {
-                            addInstruction(not_(srcReg, dstReg), 2, preserveV | preserveC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::Not, srcReg, dstReg), 2, preserveV | preserveC | writeZ | writeN);
                             break;
                         }
 
@@ -1414,7 +1414,7 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
                 case 0x1: // BIC
                 {
                     doShift();
-                    addInstruction(not_(GenReg::Temp, GenReg::Temp));
+                    addInstruction(alu(GenOpcode::Not, GenReg::Temp, GenReg::Temp));
                     addInstruction(alu(GenOpcode::And, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
                     break;
                 }
@@ -1432,10 +1432,10 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
                     doShift();
 
                     if(nReg == 15) // MVN
-                        addInstruction(not_(GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
+                        addInstruction(alu(GenOpcode::Not, GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
                     else // ORN
                     {
-                        addInstruction(not_(GenReg::Temp, GenReg::Temp));
+                        addInstruction(alu(GenOpcode::Not, GenReg::Temp, GenReg::Temp));
                         addInstruction(alu(GenOpcode::Or, reg(nReg), GenReg::Temp, reg(dstReg)), 4, setFlags ? (preserveV | preserveC | writeZ | writeN) : 0);
                     }
                     break;
