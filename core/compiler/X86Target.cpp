@@ -1472,6 +1472,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
             }
 
             case GenOpcode::Jump:
+            case GenOpcode::CompareJump:
             {
                 auto condition = static_cast<GenCondition>(instr.src[0]);
                 auto regSize = sourceInfo.registers[instr.src[1]].size;
@@ -1488,12 +1489,37 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         assert(isExit || std::holds_alternative<uint32_t>(src)); // shouldn't be any non-exit jumps with unknown addr
 
                         uint8_t *branchPtr = nullptr;
-                        bool flagSet = false;
+                        
+                        Condition nativeCond = Condition::NE;
 
                         // condition
-                        if(condition != GenCondition::Always)
+                        if(instr.opcode == GenOpcode::CompareJump)
+                        {
+                            // do the comparison
+                            // (using dst for the value as we're out of sources)
+                            auto val = checkValue32(instr.dst[0], Value_Memory);
+                            assert(val.index());
+                            builder.cmpD(std::get<RMOperand>(val), 0);
+
+                            // placeholder jump
+                            branchPtr = builder.getPtr();
+                            builder.jcc(Condition::E, 1); // patch later
+
+                            switch(condition)
+                            {
+                                // this is a jump over the actual jump, so invert the condition
+                                case GenCondition::Equal:    nativeCond = Condition::NE; break;
+                                case GenCondition::NotEqual: nativeCond = Condition::E; break;
+
+                                default:
+                                    printf("unhandled cond %i in CompareJump\n", static_cast<int>(condition));
+                                    err = true;
+                            }
+                        }
+                        else if(condition != GenCondition::Always)
                         {
                             std::variant<Reg8, Reg32> f;
+                            bool flagSet = false;
 
                             if(regSize == 32)
                                 f = *mapReg32(flagsReg);// really should not get here without a valid flags reg
@@ -1593,6 +1619,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
 
                             branchPtr = builder.getPtr();
                             builder.jcc(Condition::E, 1); // patch later
+                            nativeCond = flagSet ? Condition::E : Condition::NE;
                         }
 
                         callRestoreIfNeeded(builder, needCallRestore); // we might have just done another cycleExecuted call
@@ -1636,7 +1663,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         {
                             auto off = builder.getPtr() - branchPtr - 2;
                             builder.patch(branchPtr, branchPtr + 2);
-                            builder.jcc(flagSet ? Condition::E : Condition::NE, off);
+                            builder.jcc(nativeCond, off);
                             builder.endPatch();
                         }
                     }

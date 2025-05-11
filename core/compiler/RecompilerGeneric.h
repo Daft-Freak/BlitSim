@@ -38,6 +38,7 @@ enum class GenOpcode : uint8_t
     SignExtend16,
 
     Jump,
+    CompareJump, // does internal comparison (dst[0] against 0)
 };
 
 // 1st src of jump
