@@ -295,7 +295,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
             else
             {
                 // dst < 0
-                builder.cmp(dst, int8_t(0));
+                builder.cmpD(dst, int8_t(0));
                 builder.jcc(Condition::GE, 6);
             }
 
@@ -308,7 +308,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
         if(flags & zFlag)
         {
             if(!(haveResFlags & zFlag))
-                builder.cmp(dst, int8_t(0));
+                builder.cmpD(dst, int8_t(0));
 
             builder.jcc(Condition::NE, 6);
             builder.or_(*f, 1u << getFlagInfo(SourceFlagType::Zero).bit);
