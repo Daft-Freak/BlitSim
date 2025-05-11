@@ -994,14 +994,8 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         {
                             case 0x0: // SXTH
                             case 0x1: // SXTB
-                            {
-                                GenOpInfo extOp{};
-                                extOp.opcode = ((opcode >> 6) & 3) == 0 ? GenOpcode::SignExtend16 : GenOpcode::SignExtend8;
-                                extOp.src[0] = static_cast<uint8_t>(srcReg);
-                                extOp.dst[0] = static_cast<uint8_t>(dstReg);
-                                addInstruction(extOp, 2);
+                                addInstruction(alu(((opcode >> 6) & 3) == 0 ? GenOpcode::SignExtend16 : GenOpcode::SignExtend8, srcReg, dstReg), 2);
                                 break;
-                            }
                             case 0x2: // UXTH
                                 addInstruction(loadImm(0xFFFF));
                                 addInstruction(alu(GenOpcode::And, srcReg, GenReg::Temp, dstReg), 2);
