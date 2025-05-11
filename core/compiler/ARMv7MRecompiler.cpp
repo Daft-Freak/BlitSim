@@ -2382,6 +2382,87 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
                         break;
                     }
 
+                    // misc ops
+                    case 9:
+                    {
+                        assert(!(op2 & 0b100));
+                        assert(((opcode32 >> 16) & 0xF) == (opcode32 & 0xF)); // m encoded twice
+
+                        auto dReg = reg((opcode32 >> 8) & 0xF);
+                        auto mReg = reg(opcode32 & 0xF);
+
+                        // TODO: we can do better here with access to a byte swapping instruction...
+                        switch(op2 & 3)
+                        {
+                            case 0: // REV
+                                // rotate by 8
+                                addInstruction(loadImm(8));
+                                addInstruction(alu(GenOpcode::RotateRight, mReg, GenReg::Temp, GenReg::Temp2));
+
+                                // rotate by 24
+                                addInstruction(loadImm(24));
+                                addInstruction(alu(GenOpcode::RotateRight, mReg, GenReg::Temp, dReg));
+
+                                // each of these has half of the right answer
+                                // mask them
+                                addInstruction(loadImm(0xFF00FF00));
+                                addInstruction(alu(GenOpcode::And, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                                addInstruction(loadImm(0x00FF00FF));
+                                addInstruction(alu(GenOpcode::And, dReg, GenReg::Temp, dReg));
+
+                                // combine result
+                                addInstruction(alu(GenOpcode::Or, dReg, GenReg::Temp2, dReg), 4);
+                                break;
+
+                            case 1: // REV16
+                                // rotate by 8
+                                addInstruction(loadImm(8));
+                                addInstruction(alu(GenOpcode::RotateRight, mReg, GenReg::Temp, GenReg::Temp2));
+
+                                // rotate by 24
+                                addInstruction(loadImm(24));
+                                addInstruction(alu(GenOpcode::RotateRight, mReg, GenReg::Temp, dReg));
+
+                                // each of these has half of the right answer
+                                // mask them
+                                addInstruction(loadImm(0x00FF00FF));
+                                addInstruction(alu(GenOpcode::And, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                                addInstruction(loadImm(0xFF00FF00));
+                                addInstruction(alu(GenOpcode::And, dReg, GenReg::Temp, dReg));
+
+                                // combine result
+                                addInstruction(alu(GenOpcode::Or, dReg, GenReg::Temp2, dReg), 4);
+                                break;
+
+                            case 3: // REVSH
+                                // rotate by 8
+                                addInstruction(loadImm(8));
+                                addInstruction(alu(GenOpcode::RotateRight, mReg, GenReg::Temp, GenReg::Temp2));
+
+                                // rotate by 24
+                                addInstruction(loadImm(24));
+                                addInstruction(alu(GenOpcode::RotateRight, mReg, GenReg::Temp, dReg));
+
+                                // each of these has half of the right answer
+                                // mask them
+                                addInstruction(loadImm(0x00FF));
+                                addInstruction(alu(GenOpcode::And, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                                addInstruction(loadImm(0xFF00));
+                                addInstruction(alu(GenOpcode::And, dReg, GenReg::Temp, dReg));
+
+                                // combine result
+                                addInstruction(alu(GenOpcode::Or, dReg, GenReg::Temp2, dReg));
+
+                                // sign extend
+                                addInstruction(alu(GenOpcode::SignExtend16, dReg, dReg), 4);
+                                break;
+
+                            default:
+                                printf("unhandled dp (reg) op in convertToGeneric %i %i\n", op1, op2 & 3);
+                            return true;
+                        }
+                        break;
+                    }
 
                     default:
                         printf("unhandled dp (reg) op in convertToGeneric %i\n", op1);
