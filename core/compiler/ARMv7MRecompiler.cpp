@@ -960,9 +960,6 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         break;
                     }
 
-                    /*
-                    these would need to preserve flags
-
                     case 0x1: // CBZ
                     case 0x3:
                     case 0x9: // CBNZ
@@ -972,18 +969,21 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         int offset = (opcode & 0xF8) >> 2 | (opcode & (1 << 9)) >> 3;
                         auto src = reg(opcode & 7);
 
-                        // compare with 0
-                        addInstruction(loadImm(0));
-                        addInstruction(compare(src, GenReg::Temp, 0), 0, writeZ);
-
-                        // branch
                         auto addr = pc + 2 + offset;
                         addInstruction(loadImm(addr));
-                        addInstruction(jump(nz ? GenCondition::NotEqual : GenCondition::Equal, GenReg::Temp, 0), 2);
+
+                        GenOpInfo jump{};
+                        jump.opcode = GenOpcode::CompareJump;
+                        jump.src[0] = static_cast<uint8_t>(nz ? GenCondition::NotEqual : GenCondition::Equal);
+                        jump.src[1] = static_cast<uint8_t>(GenReg::Temp);
+                        jump.dst[0] = static_cast<uint8_t>(src);
+
+                        addInstruction(jump, 2);
 
                         maxBranch = std::max(maxBranch, addr);
+
                         break;
-                    }*/
+                    }
                     
                     case 0x2:
                     {
