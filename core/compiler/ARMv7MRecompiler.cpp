@@ -2054,7 +2054,7 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
                     {
                         auto op = (opcode32 >> 4) & 0xF;
 
-                        if(op == 0x4 || op == 0x5) // DSB/DMB
+                        if(op == 0x4 || op == 0x5 || op == 0x6) // DSB/DMB/ISB
                         {
                             GenOpInfo op{};
                             op.opcode = GenOpcode::NOP;
