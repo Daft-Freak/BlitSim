@@ -151,6 +151,12 @@ void X86Builder::call(Reg64 r)
     encodeModRM(rm, 2);
 }
 
+// sign extend EAX -> EDX:EAX
+void X86Builder::cdq()
+{
+    write(0x99);
+}
+
 void X86Builder::cmc()
 {
     write(0xF5); // opcode

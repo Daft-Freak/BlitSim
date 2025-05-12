@@ -184,6 +184,8 @@ public:
     void call(int disp);
     void call(Reg64 r);
 
+    void cdq();
+
     void cmc();
 
     void cmp(RMOperand dst, Reg32 src);
