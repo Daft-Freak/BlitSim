@@ -2396,8 +2396,32 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
         }
         else if((opcode32 & 0x3800000) == 0x3800000) // long multiply (accumulate), divide
         {
-            printf("unhandled op in convertToGeneric %08X (lmuldiv)\n", opcode32 & 0xFF000000);
-            return true;
+            auto op1 = (opcode32 >> 20) & 7;
+            auto op2 = (opcode32 >> 4) & 0xF;
+        
+            auto nReg = reg((opcode32 >> 16) & 0xF);
+            auto dstLoReg = (opcode32 >> 12) & 0xF;
+            auto dstHiReg = reg((opcode32 >> 8) & 0xF);
+            auto mReg = reg(opcode32 & 0xF);
+
+            switch(op1)
+            {
+                case 1: // SDIV
+                    assert(op2 == 0xF);
+                    assert(dstLoReg == 0xF);
+                    addInstruction(alu(GenOpcode::DivideSigned, nReg, mReg, dstHiReg), 4);
+                    break;
+
+                case 3: // UDIV
+                    assert(op2 == 0xF);
+                    assert(dstLoReg == 0xF);
+                    addInstruction(alu(GenOpcode::DivideUnsigned, nReg, mReg, dstHiReg), 4);
+                    break;
+
+                default:
+                    printf("unhandled op in convertToGeneric %08X (lmuldiv)\n", opcode32 & 0xFFF00000);
+                    return true;
+            }
         }
         else if((opcode32 & 0x3800000) == 0x3000000) // multiply (accumulate), diff
         {
