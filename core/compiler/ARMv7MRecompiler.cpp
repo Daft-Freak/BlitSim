@@ -2444,6 +2444,35 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
                 if(hasA) // MLA/MLS
                     addInstruction(alu(op2 == 1 ? GenOpcode::Subtract : GenOpcode::Add, reg(aReg), GenReg::Temp, dstReg), 4);
             }
+            else if(op1 == 1) // SML(A)[BT][BT]
+            {
+                bool nHigh = opcode32 & (1 << 5);
+                bool mHigh = opcode32 & (1 << 4);
+                bool hasA = aReg != 15;
+
+                // get two signed 16 bit values
+                if(nHigh)
+                {
+                    // shift down
+                    addInstruction(loadImm(16));
+                    addInstruction(alu(GenOpcode::ShiftRightLogic, nReg, GenReg::Temp, GenReg::Temp2));
+                }
+                addInstruction(alu(GenOpcode::SignExtend16, nHigh ? GenReg::Temp2 : nReg, GenReg::Temp2));
+
+                if(mHigh)
+                {
+                    // shift down
+                    addInstruction(loadImm(16));
+                    addInstruction(alu(GenOpcode::ShiftRightLogic, mReg, GenReg::Temp, GenReg::Temp));
+                }
+                addInstruction(alu(GenOpcode::SignExtend16, mHigh ? GenReg::Temp : mReg, GenReg::Temp));
+
+                // multiply them
+                addInstruction(alu(GenOpcode::Multiply, GenReg::Temp, GenReg::Temp2, hasA ? GenReg::Temp : dstReg), hasA ? 0 : 4);
+
+                if(hasA) // SMLAxx
+                    addInstruction(alu(GenOpcode::Add, reg(aReg), GenReg::Temp, dstReg), 4);
+            }
             else
             {
                 printf("unhandled op in convertToGeneric %08X (muldiff)\n", opcode32 & 0xFFF00000);
