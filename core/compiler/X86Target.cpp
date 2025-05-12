@@ -36,6 +36,22 @@ static bool isXHReg(Reg8 reg)
     return static_cast<int>(reg) >= 4 && static_cast<int>(reg) < 8;
 }
 
+static void doPatch(X86Builder &builder, uint8_t *patchPtr, int patchLen, std::function<void(X86Builder &)> patchFunc)
+{
+    // do nothing if builder already in a bad state
+    if(!patchPtr || builder.getError())
+        return;
+
+    builder.patch(patchPtr, patchPtr + patchLen);
+
+    patchFunc(builder);
+
+    // should never write something too big
+    assert(!builder.getError());
+
+    builder.endPatch();
+}
+
 // more shift helpers
 static bool doRegImmShift32(X86Builder &builder, std::variant<std::monostate, RMOperand, uint32_t> dst, std::variant<std::monostate, Reg8, uint8_t> src, std::function<void(X86Builder &, RMOperand)> regOp, std::function<void(X86Builder &, RMOperand, uint8_t)> immOp, std::function<void(X86Builder &)> preOp, bool rotate = false)
 {
@@ -65,24 +81,21 @@ static bool doRegImmShift32(X86Builder &builder, std::variant<std::monostate, RM
 
         auto patchCondBranch = [&builder](uint8_t *branchPtr, Condition cond)
         {
-            if(!branchPtr || builder.getError())
-                return;
-
             auto off = builder.getPtr() - branchPtr - 2;
-            builder.patch(branchPtr, branchPtr + 2);
-            builder.jcc(cond, off);
-            builder.endPatch();
+
+            doPatch(builder, branchPtr, 2, [&](X86Builder &builder)
+            {
+                builder.jcc(cond, off);
+            });
         };
 
         auto patchBranch = [&builder](uint8_t *branchPtr)
         {
-            if(!branchPtr || builder.getError())
-                return;
-
             auto off = builder.getPtr() - branchPtr - 2;
-            builder.patch(branchPtr, branchPtr + 2);
-            builder.jmp(off);
-            builder.endPatch();
+            doPatch(builder, branchPtr, 2, [&](X86Builder &builder)
+            {
+                builder.jmp(off);
+            });
         };
 
         // special cases
@@ -1682,13 +1695,12 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                         }
 
                         // patch the condition jump
-                        if(branchPtr && !builder.getError())
+                        auto off = builder.getPtr() - branchPtr - 2;
+
+                        doPatch(builder, branchPtr, 2, [&](X86Builder &builder)
                         {
-                            auto off = builder.getPtr() - branchPtr - 2;
-                            builder.patch(branchPtr, branchPtr + 2);
                             builder.jcc(nativeCond, off);
-                            builder.endPatch();
-                        }
+                        });
                     }
                 }
                 else
