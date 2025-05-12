@@ -200,6 +200,12 @@ public:
     void dec(Reg16 r);
     void dec(Reg8 r);
 
+    void divD(RMOperand src);
+    void div(Reg32 src) {divD(RMOperand{src});}
+
+    void idivD(RMOperand src);
+    void idiv(Reg32 src) {idivD(RMOperand{src});}
+
     void imul(Reg32 dst, RMOperand src);
     void imul(Reg32 dst, Reg32 src) {imul(dst, RMOperand{src});}
 

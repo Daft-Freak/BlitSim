@@ -199,6 +199,18 @@ void X86Builder::dec(Reg8 r)
     encode(0xFE, 1, RMOperand(r), 8);
 }
 
+// reg/mem -> EDX:EAX
+void X86Builder::divD(RMOperand src)
+{
+    encode(0xF6, 6, src, 32);
+}
+
+// reg/mem -> EDX:EAX
+void X86Builder::idivD(RMOperand src)
+{
+    encode(0xF6, 7, src, 32);
+}
+
 // reg/mem -> reg
 void X86Builder::imul(Reg32 dst, RMOperand src)
 {
