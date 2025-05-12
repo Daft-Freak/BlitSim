@@ -1115,6 +1115,84 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         break;   
                     }
 
+                    case 0xA:
+                    {
+                        auto srcReg = reg((opcode >> 3) & 7);
+                        auto dstReg = reg(opcode & 7);
+
+                        switch((opcode >> 6) & 3)
+                        {
+                            case 0: // REV
+                                // rotate by 8
+                                addInstruction(loadImm(8));
+                                addInstruction(alu(GenOpcode::RotateRight, srcReg, GenReg::Temp, GenReg::Temp2));
+                        
+                                // rotate by 24
+                                addInstruction(loadImm(24));
+                                addInstruction(alu(GenOpcode::RotateRight, srcReg, GenReg::Temp, dstReg));
+                        
+                                // each of these has half of the right answer
+                                // mask them
+                                addInstruction(loadImm(0xFF00FF00));
+                                addInstruction(alu(GenOpcode::And, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                                addInstruction(loadImm(0x00FF00FF));
+                                addInstruction(alu(GenOpcode::And, dstReg, GenReg::Temp, dstReg));
+                        
+                                // combine result
+                                addInstruction(alu(GenOpcode::Or, dstReg, GenReg::Temp2, dstReg), 2);
+                                break;
+
+                            case 1: // REV16
+                                // rotate by 8
+                                addInstruction(loadImm(8));
+                                addInstruction(alu(GenOpcode::RotateRight, srcReg, GenReg::Temp, GenReg::Temp2));
+
+                                // rotate by 24
+                                addInstruction(loadImm(24));
+                                addInstruction(alu(GenOpcode::RotateRight, srcReg, GenReg::Temp, dstReg));
+
+                                // each of these has half of the right answer
+                                // mask them
+                                addInstruction(loadImm(0x00FF00FF));
+                                addInstruction(alu(GenOpcode::And, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                                addInstruction(loadImm(0xFF00FF00));
+                                addInstruction(alu(GenOpcode::And, dstReg, GenReg::Temp, dstReg));
+
+                                // combine result
+                                addInstruction(alu(GenOpcode::Or, dstReg, GenReg::Temp2, dstReg), 2);
+                                break;
+
+                            case 2:
+                                assert(false);
+                                done = true;
+                                break;
+
+                            case 3: // REVSH
+                                // rotate by 8
+                                addInstruction(loadImm(8));
+                                addInstruction(alu(GenOpcode::RotateRight, srcReg, GenReg::Temp, GenReg::Temp2));
+                        
+                                // rotate by 24
+                                addInstruction(loadImm(24));
+                                addInstruction(alu(GenOpcode::RotateRight, srcReg, GenReg::Temp, dstReg));
+                        
+                                // each of these has half of the right answer
+                                // mask them
+                                addInstruction(loadImm(0x00FF));
+                                addInstruction(alu(GenOpcode::And, GenReg::Temp2, GenReg::Temp, GenReg::Temp2));
+                                addInstruction(loadImm(0xFF00));
+                                addInstruction(alu(GenOpcode::And, dstReg, GenReg::Temp, dstReg));
+                        
+                                // combine result
+                                addInstruction(alu(GenOpcode::Or, dstReg, GenReg::Temp2, dstReg));
+                        
+                                // sign extend
+                                addInstruction(alu(GenOpcode::SignExtend16, dstReg, dstReg), 2);
+                                break;
+                        }
+                        break;
+                    }
+
                     case 0xF: // hints
                     {
                         auto opA = (opcode >> 4) & 0xF;
