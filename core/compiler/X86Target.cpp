@@ -1033,6 +1033,157 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 break;
             }
 
+            case GenOpcode::DivideSigned:
+            case GenOpcode::DivideUnsigned:
+            {
+                auto regSize = sourceInfo.registers[instr.src[0]].size;
+
+                if(regSize == 32)
+                {
+                    auto src0 = checkValue32(instr.src[0], Value_Memory);
+                    auto src1 = checkValue32(instr.src[1], Value_Memory);
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
+
+                    if(src0.index() && src1.index() && dst.index())
+                    {
+                        auto rmSrc0 = std::get<RMOperand>(src0);
+                        auto rmSrc1 = std::get<RMOperand>(src1);
+                        auto rmDst = std::get<RMOperand>(dst);
+
+                        bool src0IsDst = instr.src[0] == instr.dst[0];
+
+                        // first of all, make sure we don't divide by zero
+                        builder.cmpD(rmSrc1, 0);
+                        auto zeroBranch = builder.getPtr();
+                        builder.jcc(Condition::NE, 0); // != 0
+
+                        builder.mov(rmDst, uint32_t(0));
+
+                        auto zeroDoneBranch = builder.getPtr();
+                        builder.jmp(0);
+
+                        // patch branch
+                        int off;
+                        auto patchCond = [&](X86Builder &builder)
+                        {
+                            builder.jcc(Condition::NE, off);
+                        };
+                        off = builder.getPtr() - zeroBranch - 2;
+                        doPatch(builder, zeroBranch, 2, patchCond);
+
+                        // for signed divide also skip min int / -1
+                        uint8_t *minIntMinus1DoneBranch = nullptr;
+                        if(instr.opcode == GenOpcode::DivideSigned)
+                        {
+                            // src 1 == -1
+                            builder.cmpD(rmSrc1, -1);
+                            auto minus1Branch = builder.getPtr();
+                            builder.jcc(Condition::NE, 0); // != -1
+
+                            // src 0 == min int
+                            builder.cmp(rmSrc0, 0x80000000);
+                            auto minIntBranch = builder.getPtr();
+                            builder.jcc(Condition::NE, 0); // != 0x80000000
+
+                            builder.mov(rmDst, 0x80000000);
+
+                            minIntMinus1DoneBranch = builder.getPtr();
+                            builder.jmp(0);
+
+                            // patch branches
+                            off = builder.getPtr() - minus1Branch - 2;
+                            doPatch(builder, minus1Branch, 2, patchCond);
+                            off = builder.getPtr() - minIntBranch - 2;
+                            doPatch(builder, minIntBranch, 2, patchCond);
+                        }
+
+                        // okay, it's not zero
+
+                        Reg32 preservedEAX = Reg32::R8D;
+                        Reg32 preservedEDX = Reg32::R9D;
+                       
+                        // src0 needs to be in EAX
+                        if(rmSrc0.isMem() || rmSrc0.getReg32() != Reg32::EAX)
+                        {
+                            // if src0 and dst are the same (and not mem) swap into EAX directly
+                            if(!rmSrc0.isMem() && src0IsDst)
+                            {
+                                preservedEAX = rmSrc0.getReg32();
+                                builder.xchg(preservedEAX, Reg32::EAX);
+                            }
+                            else
+                            {
+                                builder.mov(preservedEAX, Reg32::EAX);
+                                builder.mov(Reg32::EAX, rmSrc0);
+                            }
+                        }
+
+                        // also need to preserve EDX
+                        bool restoreEDX = rmDst.isMem() || rmDst.getReg32() != Reg32::EDX;
+                        bool saveEDX = restoreEDX;
+
+                        // force saving EDX if it's the other source
+                        if(!rmSrc1.isMem() && rmSrc1.getReg32() == Reg32::EDX)
+                        {
+                            saveEDX = true;
+                            rmSrc1 = RMOperand(preservedEDX);
+                        }
+
+                        if(saveEDX)
+                            builder.mov(preservedEDX, Reg32::EDX);
+
+                        if(instr.opcode == GenOpcode::DivideSigned)
+                        {
+                            // ...and extend EAX into it
+                            builder.cdq();
+
+                            // finally we can do the divide
+                            builder.idivD(rmSrc1);
+                        }
+                        else
+                        {
+                            //... and zero it
+                            builder.xor_(Reg32::EDX, Reg32::EDX);
+
+                            // finally we can do the divide
+                            builder.divD(rmSrc1);
+                        }
+
+                        // restore EDX
+                        if(restoreEDX)
+                            builder.mov(Reg32::EDX, preservedEDX);
+
+                        // get dest in the right place and restore eax
+                        if(rmDst.isMem() || rmDst.getReg32() != Reg32::EAX)
+                        {
+                            // if dst/src0 were the same (and not memory), we can just swap back
+                            if(!rmDst.isMem() && src0IsDst)
+                                builder.xchg(preservedEAX, Reg32::EAX);
+                            else
+                            {
+                                builder.mov(rmDst, Reg32::EAX);
+                                builder.mov(Reg32::EAX, preservedEAX);
+                            }
+                        }
+
+                        // patch the other branch
+                        off = builder.getPtr() - zeroDoneBranch - 2;
+                        doPatch(builder, zeroDoneBranch, 2, [&](X86Builder &builder)
+                        {
+                            builder.jmp(off);
+                        });
+                        off = builder.getPtr() - minIntMinus1DoneBranch - 2;
+                        doPatch(builder, minIntMinus1DoneBranch, 2, [&](X86Builder &builder)
+                        {
+                            builder.jmp(off);
+                        });
+                    }
+                }
+                else
+                    badRegSize(regSize);
+                break;
+            }
+
             case GenOpcode::Multiply:
             {
                 auto regSize = sourceInfo.registers[instr.src[0]].size;
