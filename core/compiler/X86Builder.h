@@ -260,16 +260,34 @@ public:
 
     void push(Reg64 r);
 
-    void rcl(Reg8 dst);
-    void rcl(Reg8 r, uint8_t count);
+    void rclD(RMOperand r);
+    void rclB(RMOperand r);
+    void rclD(RMOperand r, uint8_t count);
+    void rclB(RMOperand r, uint8_t count);
+    void rcl(Reg32 dst) {rclD(RMOperand{dst});}
+    void rcl(Reg8 dst) {rclB(RMOperand{dst});}
+    void rcl(Reg32 r, uint8_t count) {rclD(RMOperand{r}, count);}
+    void rcl(Reg8 r, uint8_t count) {rclB(RMOperand{r}, count);}
 
-    void rcr(Reg8 dst);
-    void rcr(Reg8 r, uint8_t count);
+    void rcrD(RMOperand r);
+    void rcrB(RMOperand r);
+    void rcrD(RMOperand r, uint8_t count);
+    void rcrB(RMOperand r, uint8_t count);
+    void rcr(Reg32 dst) {rcrD(RMOperand{dst});}
+    void rcr(Reg8 dst) {rcrB(RMOperand{dst});}
+    void rcr(Reg32 r, uint8_t count) {rcrD(RMOperand{r}, count);}
+    void rcr(Reg8 r, uint8_t count) {rcrB(RMOperand{r}, count);}
 
     void ret();
 
-    void rol(Reg8 dst);
-    void rol(Reg8 r, uint8_t count);
+    void rolD(RMOperand r);
+    void rolB(RMOperand r);
+    void rolD(RMOperand r, uint8_t count);
+    void rolB(RMOperand r, uint8_t count);
+    void rol(Reg32 dst) {rolD(RMOperand{dst});}
+    void rol(Reg8 dst) {rolB(RMOperand{dst});}
+    void rol(Reg32 r, uint8_t count) {rolD(RMOperand{r}, count);}
+    void rol(Reg8 r, uint8_t count) {rolB(RMOperand{r}, count);}
 
     void rorD(RMOperand r);
     void rorB(RMOperand r);
