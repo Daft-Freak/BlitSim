@@ -543,10 +543,34 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
 
     auto pcPtr = reinterpret_cast<const uint16_t *>(std::as_const(mem).mapAddress(pc));
 
+    uint8_t itState = 0;
+
+    auto inIT = [&itState]() {return itState & 0xF;};
+
     while(!done)
     {
         uint16_t opcode = *pcPtr++;
         pc += 2;
+
+        bool itStart = false; // if the current instruction was the IT itself
+
+        if(itState)
+        {
+            auto cond = itState >> 4;
+            if(cond != 0xF) // always
+            {
+                cond ^= 1; // invert it
+
+                // figure out next PC
+                auto nextPC = pc;
+
+                if((opcode >> 12) == 0xF || (opcode >> 11) == 0x1D) //32bit
+                    nextPC += 2;
+
+                addInstruction(loadImm(nextPC));
+                addInstruction(jump(static_cast<GenCondition>(cond)));
+            }
+        }
 
         switch(opcode >> 12)
         {
@@ -570,9 +594,9 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         src1Reg = reg((opcode >> 6) & 7);
 
                     if(isSub)
-                        addInstruction(alu(GenOpcode::Subtract, srcReg, src1Reg, dstReg), 2, writeV | writeC | writeZ | writeN);
+                        addInstruction(alu(GenOpcode::Subtract, srcReg, src1Reg, dstReg), 2, inIT() ? 0 : (writeV | writeC | writeZ | writeN));
                     else
-                        addInstruction(alu(GenOpcode::Add, srcReg, src1Reg, dstReg), 2, writeV | writeC | writeZ | writeN);
+                        addInstruction(alu(GenOpcode::Add, srcReg, src1Reg, dstReg), 2, inIT() ? 0 : (writeV | writeC | writeZ | writeN));
                 }
                 else // format 1, move shifted register
                 {
@@ -583,23 +607,23 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                         case 0: // LSL
                         {
                             if(offset == 0)
-                                addInstruction(move(srcReg, dstReg), 2, preserveV | preserveC | writeZ | writeN);
+                                addInstruction(move(srcReg, dstReg), 2, inIT() ? 0 : (preserveV | preserveC | writeZ | writeN));
                             else
                             {
                                 addInstruction(loadImm(offset));
-                                addInstruction(alu(GenOpcode::ShiftLeft, srcReg, GenReg::Temp, dstReg), 2, preserveV | writeC | writeZ | writeN);
+                                addInstruction(alu(GenOpcode::ShiftLeft, srcReg, GenReg::Temp, dstReg), 2, inIT() ? 0 : (preserveV | writeC | writeZ | writeN));
                             }
                             break;
                         }
 
                         case 1: // LSR
                             addInstruction(loadImm(offset ? offset : 32));
-                            addInstruction(alu(GenOpcode::ShiftRightLogic, srcReg, GenReg::Temp, dstReg), 2, preserveV | writeC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::ShiftRightLogic, srcReg, GenReg::Temp, dstReg), 2, inIT() ? 0 : (preserveV | writeC | writeZ | writeN));
                             break;
 
                         case 2: // ASR
                             addInstruction(loadImm(offset ? offset : 32));
-                            addInstruction(alu(GenOpcode::ShiftRightArith, srcReg, GenReg::Temp, dstReg), 2, preserveV | writeC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::ShiftRightArith, srcReg, GenReg::Temp, dstReg), 2, inIT() ? 0 : (preserveV | writeC | writeZ | writeN));
                             break;
                     }
                 }
@@ -618,16 +642,16 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 switch(instOp)
                 {
                     case 0: // MOV
-                        addInstruction(move(GenReg::Temp, dstReg), 2, preserveV | preserveC | writeZ | writeN);
+                        addInstruction(move(GenReg::Temp, dstReg), 2, inIT() ? 0 : (preserveV | preserveC | writeZ | writeN));
                         break;
                     case 1: // CMP
                         addInstruction(compare(dstReg, GenReg::Temp), 2, writeV | writeC | writeZ | writeN);
                         break;
                     case 2: // ADD
-                        addInstruction(alu(GenOpcode::Add, dstReg, GenReg::Temp, dstReg), 2, writeV | writeC | writeZ | writeN);
+                        addInstruction(alu(GenOpcode::Add, dstReg, GenReg::Temp, dstReg), 2, inIT() ? 0 : (writeV | writeC | writeZ | writeN));
                         break;
                     case 3: // SUB
-                        addInstruction(alu(GenOpcode::Subtract, dstReg, GenReg::Temp, dstReg), 2, writeV | writeC | writeZ | writeN);
+                        addInstruction(alu(GenOpcode::Subtract, dstReg, GenReg::Temp, dstReg), 2, inIT() ? 0 : (writeV | writeC | writeZ | writeN));
                         break;
                 }
 
@@ -757,35 +781,35 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                     switch(instOp)
                     {
                         case 0x0: // AND
-                            addInstruction(alu(GenOpcode::And, dstReg, srcReg, dstReg), 2, preserveV | preserveC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::And, dstReg, srcReg, dstReg), 2, inIT() ? 0 : (preserveV | preserveC | writeZ | writeN));
                             break;
                         case 0x1: // EOR
-                            addInstruction(alu(GenOpcode::Xor, dstReg, srcReg, dstReg), 2, preserveV | preserveC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::Xor, dstReg, srcReg, dstReg), 2, inIT() ? 0 : (preserveV | preserveC | writeZ | writeN));
                             break;
                         case 0x2: // LSL
-                            addInstruction(alu(GenOpcode::ShiftLeft, dstReg, srcReg, dstReg), 2, preserveV | preserveC | writeC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::ShiftLeft, dstReg, srcReg, dstReg), 2, inIT() ? 0 : (preserveV | preserveC | writeC | writeZ | writeN));
                             break;
                         case 0x3: // LSR
-                            addInstruction(alu(GenOpcode::ShiftRightLogic, dstReg, srcReg, dstReg), 2, preserveV | preserveC | writeC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::ShiftRightLogic, dstReg, srcReg, dstReg), 2, inIT() ? 0 : (preserveV | preserveC | writeC | writeZ | writeN));
                             break;
                         case 0x4: // ASR
-                            addInstruction(alu(GenOpcode::ShiftRightArith, dstReg, srcReg, dstReg), 2, preserveV | preserveC | writeC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::ShiftRightArith, dstReg, srcReg, dstReg), 2, inIT() ? 0 : (preserveV | preserveC | writeC | writeZ | writeN));
                             break;
                         case 0x5: // ADC
-                            addInstruction(alu(GenOpcode::AddWithCarry, dstReg, srcReg, dstReg), 2, writeV | writeC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::AddWithCarry, dstReg, srcReg, dstReg), 2, inIT() ? 0 : (writeV | writeC | writeZ | writeN));
                             break;
                         case 0x6: // SBC
-                            addInstruction(alu(GenOpcode::SubtractWithCarry, dstReg, srcReg, dstReg), 2, writeV | writeC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::SubtractWithCarry, dstReg, srcReg, dstReg), 2, inIT() ? 0 : (writeV | writeC | writeZ | writeN));
                             break;
                         case 0x7: // ROR
-                            addInstruction(alu(GenOpcode::RotateRight, dstReg, srcReg, dstReg), 2, preserveV | preserveC | writeC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::RotateRight, dstReg, srcReg, dstReg), 2, inIT() ? 0 : (preserveV | preserveC | writeC | writeZ | writeN));
                             break;
                         case 0x8: // TST
                             addInstruction(alu(GenOpcode::And, dstReg, srcReg, GenReg::Temp), 2, preserveV | preserveC | writeZ | writeN);
                             break;
                         case 0x9: // NEG
                             addInstruction(loadImm(0));
-                            addInstruction(alu(GenOpcode::Subtract, GenReg::Temp, srcReg, dstReg), 2, writeV | writeC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::Subtract, GenReg::Temp, srcReg, dstReg), 2, inIT() ? 0 : (writeV | writeC | writeZ | writeN));
                             break;
                         case 0xA: // CMP
                             addInstruction(compare(dstReg, srcReg), 2, writeV | writeC | writeZ | writeN);
@@ -794,20 +818,20 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                             addInstruction(alu(GenOpcode::Add, dstReg, srcReg, GenReg::Temp), 2, writeV | writeC | writeZ | writeN);
                             break;
                         case 0xC: // ORR
-                            addInstruction(alu(GenOpcode::Or, dstReg, srcReg, dstReg), 2, preserveV | preserveC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::Or, dstReg, srcReg, dstReg), 2, inIT() ? 0 : (preserveV | preserveC | writeZ | writeN));
                             break;
                         case 0xD: // MUL
-                            addInstruction(alu(GenOpcode::Multiply, dstReg, srcReg, dstReg), 2, preserveV | preserveC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::Multiply, dstReg, srcReg, dstReg), 2, inIT() ? 0 : (preserveV | preserveC | writeZ | writeN));
                             break;
                         case 0xE: // BIC
                         {
                             addInstruction(alu(GenOpcode::Not, srcReg, GenReg::Temp));
-                            addInstruction(alu(GenOpcode::And, dstReg, GenReg::Temp, dstReg), 2, preserveV | preserveC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::And, dstReg, GenReg::Temp, dstReg), 2, inIT() ? 0 : (preserveV | preserveC | writeZ | writeN));
                             break;
                         }
                         case 0xF: // MVN
                         {
-                            addInstruction(alu(GenOpcode::Not, srcReg, dstReg), 2, preserveV | preserveC | writeZ | writeN);
+                            addInstruction(alu(GenOpcode::Not, srcReg, dstReg), 2, inIT() ? 0 : (preserveV | preserveC | writeZ | writeN));
                             break;
                         }
 
@@ -1115,10 +1139,17 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                                     printf("unhandled hint op in convertToGeneric %X %X\n", opA, opB);
                             }
                         }
-                        else
+                        else // IT
                         {
-                            done = true;
-                            printf("unhandled hint op in convertToGeneric %X %X\n", opA, opB);
+                            itState = opcode & 0xFF;
+                            itStart = true;
+
+                            // need something to update PC
+                            GenOpInfo op{};
+                            op.opcode = GenOpcode::NOP;
+                            op.cycles = 1;
+
+                            addInstruction(op, 2);
                         }
                         break;
                     }
@@ -1305,7 +1336,20 @@ void ARMv7MRecompiler::convertTHUMBToGeneric(uint32_t &pc, GenBlockInfo &genBloc
                 done = true;
             }
         }
+    
+        if(itState && !itStart && genBlock.instructions.back().len)
+        {
+            // advance IT
+            if((itState & 7) == 0)
+                itState = 0; // done
+            else
+                itState = (itState & 0xE0) | ((itState << 1) & 0x1F);
+        }
     }
+
+    // throw everything away if we were in the middle of an IT block
+    if(inIT())
+        genBlock.instructions.clear();
 }
 
 bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &genBlock, uint32_t opcode32, uint32_t &maxBranch)
