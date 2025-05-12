@@ -1348,12 +1348,6 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
 
             bool shiftCarry = setFlags && op < 8/*not add/sub*/;
 
-            if(type == 3 && !imm) // RRX
-            {
-                printf("unhandled dp (shift reg) op in convertToGeneric %i (rrx)\n", op);
-                return true;
-            }
-
             GenReg shiftedM = GenReg::Temp;
 
             // PKHxx needs to do more with the value
@@ -1391,13 +1385,15 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
                     {
                         if(!imm) // RRX
                         {
-                            
+                            addInstruction(loadImm(1));
+                            addInstruction(alu(GenOpcode::RotateRightCarry, reg(mReg), GenReg::Temp, shiftedM), 0, shiftCarry ? (preserveV | writeC) : 0);
                         }
                         else // ROR
                         {
                             addInstruction(loadImm(imm));
                             addInstruction(alu(GenOpcode::RotateRight, reg(mReg), GenReg::Temp, shiftedM), 0, shiftCarry ? (preserveV | writeC) : 0);
                         }
+                        break;
                     }
                 }
             };
