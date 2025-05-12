@@ -1308,7 +1308,30 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                 auto regSize = sourceInfo.registers[instr.src[0]].size;
 
                 checkSingleSource();
-                badRegSize(regSize);
+
+                if(regSize == 32)
+                {
+                    auto src = checkRegOrImm8(instr.src[1]);
+                    auto dst = checkValue32(instr.dst[0], Value_Memory);
+
+                    auto preOp = [this, &instr](X86Builder &builder)
+                    {
+                        // carry in (and clear it if we're writing it)
+                        if(writesFlag(instr.flags, SourceFlagType::Carry))
+                            builder.btr(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
+                        else
+                            builder.bt(*mapReg32(flagsReg), getFlagInfo(SourceFlagType::Carry).bit);
+                    };
+
+                    if(doRegImmShift32(builder, dst, src, std::mem_fn<void(RMOperand)>(&X86Builder::rcrD), std::mem_fn<void(RMOperand, uint8_t)>(&X86Builder::rcrD), preOp, true))
+                    {
+                        assert(!writesFlag(instr.flags, SourceFlagType::Overflow));
+                        auto setFlags = flagWriteMask(SourceFlagType::Carry); // only have carry
+                        setFlags32(std::get<RMOperand>(dst), {}, instr.flags, false, setFlags);
+                    }
+                }
+                else
+                    badRegSize(regSize);
                 break;
             }
 
