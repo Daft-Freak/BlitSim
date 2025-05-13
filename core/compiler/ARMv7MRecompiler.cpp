@@ -1641,12 +1641,45 @@ bool ARMv7MRecompiler::convertTHUMB32BitToGeneric(uint32_t &pc, GenBlockInfo &ge
         {
             auto op1 = (opcode32 >> 23) & 3;
             auto op2 = (opcode32 >> 20) & 3;
-            //auto op3 = (opcode32 >> 4) & 0xF;
+            auto op3 = (opcode32 >> 4) & 0xF;
 
             if(op1 == 1 && op2 == 1) // TBB/TBH/LDREXB/LDREXH
             {
-                printf("unhandled op in convertToGeneric %08X (tb/ldrex)\n", opcode32 & 0xFFF00000);
-                return true;
+                if(!(op3 & 0b1110)) // TBB/TBH
+                {
+                    assert((opcode32 & 0xFF00) == 0xF000);
+
+                    auto indexReg = reg(opcode32 & 0xF);
+                    auto baseReg = (opcode32 >> 16) & 0xF;
+                    auto base = baseReg == 15 ? GenReg::Temp : reg(baseReg);
+
+                    bool isH = op3 & 1;
+
+                    if(baseReg == 15)
+                        addInstruction(loadImm(pc));
+                    
+                    addInstruction(alu(GenOpcode::Add, base, indexReg, GenReg::Temp));
+
+                    // need to double the index, so add it again
+                    if(isH) // TBH
+                        addInstruction(alu(GenOpcode::Add, GenReg::Temp, indexReg, GenReg::Temp));
+
+                    addInstruction(load(isH ? 2 : 1, GenReg::Temp, GenReg::Temp));
+
+                    // offset * 2
+                    addInstruction(alu(GenOpcode::Add, GenReg::Temp, GenReg::Temp, GenReg::Temp2));
+
+                    // pc + ...
+                    addInstruction(loadImm(pc));
+                    addInstruction(alu(GenOpcode::Add, GenReg::Temp, GenReg::Temp2, GenReg::Temp));
+
+                    addInstruction(jump(), 4);
+                }
+                else
+                {
+                    printf("unhandled op in convertToGeneric %08X (ldrex)\n", opcode32 & 0xFFF000F0);
+                    return true;
+                }
             }
             else if(op1 == 0 && !(op2 & 2)) // LDREX/STREX
             {
