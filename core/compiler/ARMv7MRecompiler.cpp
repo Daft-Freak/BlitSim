@@ -482,7 +482,7 @@ bool ARMv7MRecompiler::attemptToRun()
 
             // track range of code in RAM
             // technically includes internal flash
-            if(cpuPC < 0x9000000)
+            if(cpuPC < 0x90000000)
             {
                 if(cpuPC < minRAMCode)
                     minRAMCode = cpuPC;
