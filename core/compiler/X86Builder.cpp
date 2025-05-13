@@ -232,7 +232,7 @@ void X86Builder::inc(Reg16 r)
 // reg, 8 bit
 void X86Builder::inc(Reg8 r)
 {
-    encode(0xFE, 1, RMOperand(r), 8);
+    encode(0xFE, 0, RMOperand(r), 8);
 }
 
 void X86Builder::jcc(Condition cc, int disp)
@@ -427,7 +427,7 @@ void X86Builder::not_(Reg32 r)
 // reg, 8 bit
 void X86Builder::not_(Reg8 r)
 {
-    encode(0xF6, 2, RMOperand(r), 32);
+    encode(0xF6, 2, RMOperand(r), 8);
 }
 
 // reg -> reg/mem
