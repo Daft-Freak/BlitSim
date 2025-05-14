@@ -11,6 +11,13 @@
 
 #ifdef _MSC_VER
 #define __builtin_unreachable() __assume(false)
+
+inline int __builtin_clz(unsigned int x)
+{
+    unsigned long index;
+    _BitScanReverse(&index, x);
+    return 31 ^ index;
+}
 #endif
 
 // FIXME: this still thinks it's an ARMv4T, or in some places an ARMv6M
