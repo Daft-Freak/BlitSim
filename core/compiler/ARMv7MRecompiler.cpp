@@ -398,6 +398,21 @@ void ARMv7MRecompiler::run()
     }
 }
 
+void ARMv7MRecompiler::reset()
+{
+    for(auto &saved : savedExits)
+        saved = {nullptr, 0, 0};
+
+    // clear out compiled code
+    curCodePtr = codeBuf;
+    compiled.clear();
+
+    minRAMCode = 0xFFFFFFFF;
+    maxRAMCode = 0;
+
+    entryFunc = nullptr;
+}
+
 bool ARMv7MRecompiler::attemptToRun()
 {
     uint8_t *codePtr = nullptr;

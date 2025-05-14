@@ -23,6 +23,8 @@ public:
 
     void run();
 
+    void reset();
+
 protected:
     ARMv7MCore &cpu;
 

@@ -35,6 +35,10 @@ void ARMv7MCore::reset()
     paused = false;
 
     mem.reset();
+
+#ifdef RECOMPILER
+    compiler.reset();
+#endif
 }
 
 void ARMv7MCore::setSP(uint32_t val)
