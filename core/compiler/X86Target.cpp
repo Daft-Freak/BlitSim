@@ -1357,7 +1357,7 @@ bool X86Target::compile(uint8_t *&codePtr, uint8_t *codeBufEnd, uint32_t pc, Gen
                             builder.setcc(Condition::AE, Reg8::R11B);
 
                         // flags
-                        setFlags32(RMOperand(rmDst), Reg32::R11D, instr.flags, true);
+                        setFlags32(rmDst, Reg32::R11D, instr.flags, true);
                     }
                 }
                 else
