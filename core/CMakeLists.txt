@@ -19,7 +19,7 @@ target_sources(BlitSimRecompiler INTERFACE
 
 # detect target arch
 
-if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64") # OR ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "AMD64"
+if(${CMAKE_SYSTEM_PROCESSOR} STREQUAL "x86_64" OR ${CMAKE_SYSTEM_PROCESSOR} STREQUAL "AMD64")
     target_sources(BlitSimRecompiler INTERFACE compiler/X86Builder.cpp compiler/X86Target.cpp)
     target_compile_definitions(BlitSimRecompiler INTERFACE RECOMPILER_X86)
     set(HAVE_RECOMPILER TRUE)
